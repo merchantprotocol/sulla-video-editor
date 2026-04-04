@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+*.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
+*.aac
+*.m4a
+output/
+.sulla-project
+.DS_Store

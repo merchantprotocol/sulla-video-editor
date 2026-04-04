@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulla Video Editor — V1: Transcript-Based Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-page:          #0d1117;
+    --bg-surface:       #161b22;
+    --bg-surface-alt:   #1c2128;
+    --bg-surface-hover: #21262d;
+    --text-primary:     #e6edf3;
+    --text-secondary:   #b1bac4;
+    --text-muted:       #8b949e;
+    --text-dim:         #6e7681;
+    --accent:           #5096b3;
+    --accent-hover:     #6ab0cc;
+    --success:          #3fb950;
+    --info:             #58a6ff;
+    --warning:          #e3b341;
+    --error:            #f85149;
+    --border:           #30363d;
+    --border-subtle:    #21262d;
+    --mono:             'JetBrains Mono', 'SF Mono', monospace;
+    --display:          'Playfair Display', serif;
+    --filler-bg:        rgba(229,83,75,0.12);
+    --filler-border:    rgba(229,83,75,0.3);
+    --cut-bg:           rgba(248,81,73,0.08);
+    --silence-bg:       rgba(227,179,65,0.1);
+  }
+
+  body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .app {
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  /* ═══════════════════════════════════════════════
+     TOP BAR
+     ═══════════════════════════════════════════════ */
+  .top-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .logo {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+
+  .logo span { color: var(--text-dim); font-weight: 400; }
+
+  .top-bar .spacer { flex: 1; }
+
+  .project-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .top-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .top-btn {
+    padding: 6px 12px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.12s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .top-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .top-btn svg { width: 14px; height: 14px; }
+
+  .top-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .top-btn.primary:hover { background: var(--accent-hover); }
+
+  /* ═══════════════════════════════════════════════
+     VIDEO PREVIEW — right panel
+     ═══════════════════════════════════════════════ */
+  .preview-panel {
+    grid-column: 2;
+    grid-row: 2;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+  }
+
+  .video-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+  }
+
+  .video-frame {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: var(--bg-surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .video-frame .placeholder-text {
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .video-frame .placeholder-text svg {
+    display: block;
+    margin: 0 auto 8px;
+    opacity: 0.3;
+  }
+
+  /* Playback controls */
+  .playback-bar {
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .scrubber {
+    width: 100%;
+    height: 4px;
+    background: var(--bg-surface-alt);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .scrubber-fill {
+    width: 35%;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .scrubber-fill::after {
+    content: '';
+    position: absolute;
+    right: -5px;
+    top: -3px;
+    width: 10px;
+    height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(80,150,179,0.4);
+  }
+
+  .playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .play-btn {
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .play-btn:hover { background: var(--accent-hover); transform: scale(1.05); }
+  .play-btn svg { width: 14px; height: 14px; margin-left: 1px; }
+
+  .pb-btn {
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.12s;
+  }
+
+  .pb-btn:hover { color: var(--text-secondary); background: var(--bg-surface-hover); }
+  .pb-btn svg { width: 16px; height: 16px; }
+
+  .time-display {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;
+  }
+
+  /* Speaker info */
+  .speaker-info {
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .speaker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .speaker-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+  }
+
+  .speaker-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  .speaker-time {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  /* ═══════════════════════════════════════════════
+     TRANSCRIPT PANEL — left, main area
+     ═══════════════════════════════════════════════ */
+  .transcript-panel {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Toolbar */
+  .transcript-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    gap: 4px;
+  }
+
+  .tool-btn {
+    padding: 5px 10px;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.12s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .tool-btn:hover { color: var(--text-secondary); background: var(--bg-surface-hover); }
+  .tool-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(80,150,179,0.08); }
+  .tool-btn svg { width: 14px; height: 14px; }
+
+  .tool-btn.danger { color: var(--error); }
+  .tool-btn.danger:hover { background: rgba(248,81,73,0.08); }
+
+  .tool-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+  .tool-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: rgba(248,81,73,0.15);
+    color: var(--error);
+    border-radius: 10px;
+    font-weight: 600;
+  }
+
+  .tool-badge.warning {
+    background: rgba(227,179,65,0.15);
+    color: var(--warning);
+  }
+
+  /* Transcript body */
+  .transcript-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+  }
+
+  .transcript-body::-webkit-scrollbar { width: 6px; }
+  .transcript-body::-webkit-scrollbar-track { background: transparent; }
+  .transcript-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Speaker blocks */
+  .speaker-block {
+    margin-bottom: 24px;
+  }
+
+  .speaker-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .speaker-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .speaker-label-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .speaker-timestamp {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+
+  .speaker-timestamp:hover { color: var(--accent); }
+
+  /* Words */
+  .transcript-text {
+    font-size: 15px;
+    line-height: 2;
+    color: var(--text-primary);
+  }
+
+  .word {
+    display: inline;
+    cursor: pointer;
+    border-radius: 2px;
+    padding: 1px 0;
+    transition: all 0.1s;
+  }
+
+  .word:hover { background: rgba(80,150,179,0.12); }
+
+  .word.current {
+    background: rgba(80,150,179,0.2);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .word.played { color: var(--text-muted); }
+
+  .word.filler {
+    background: var(--filler-bg);
+    border-bottom: 2px solid var(--filler-border);
+    color: var(--error);
+    text-decoration: none;
+  }
+
+  .word.cut {
+    background: var(--cut-bg);
+    text-decoration: line-through;
+    color: var(--text-dim);
+    opacity: 0.5;
+  }
+
+  .word.silence-marker {
+    color: var(--warning);
+    font-style: italic;
+    opacity: 0.6;
+    font-size: 11px;
+  }
+
+  .word.selected {
+    background: rgba(80,150,179,0.25);
+  }
+
+  /* Scene break */
+  .scene-break {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    cursor: pointer;
+  }
+
+  .scene-break-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .scene-break-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+
+  .scene-break:hover .scene-break-label {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ═══════════════════════════════════════════════
+     TIMELINE — bottom
+     ═══════════════════════════════════════════════ */
+  .timeline-panel {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .timeline-header {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    gap: 8px;
+  }
+
+  .timeline-header .spacer { flex: 1; }
+
+  .timeline-zoom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .timeline-zoom button {
+    width: 20px;
+    height: 20px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s;
+  }
+
+  .timeline-zoom button:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Ruler */
+  .timeline-ruler {
+    height: 20px;
+    background: var(--bg-surface-alt);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 80px;
+    position: relative;
+  }
+
+  .ruler-mark {
+    position: absolute;
+    bottom: 2px;
+    font-size: 9px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ruler-mark::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 0;
+    width: 1px;
+    height: 6px;
+    background: var(--border);
+  }
+
+  /* Tracks */
+  .timeline-tracks {
+    flex: 1;
+    overflow-y: auto;
+    padding-left: 0;
+  }
+
+  .timeline-track {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .track-label {
+    width: 80px;
+    padding: 0 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-subtle);
+    height: 100%;
+  }
+
+  .track-label .tl-color {
+    width: 3px;
+    height: 14px;
+    border-radius: 2px;
+  }
+
+  .track-content {
+    flex: 1;
+    height: 100%;
+    position: relative;
+    background: var(--bg-surface-alt);
+  }
+
+  .track-clip {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    border-radius: 4px;
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-size: 9px;
+    color: white;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .track-clip.video { background: rgba(88,166,255,0.3); border: 1px solid rgba(88,166,255,0.4); }
+  .track-clip.audio { background: rgba(63,185,80,0.3); border: 1px solid rgba(63,185,80,0.4); }
+  .track-clip.caption { background: rgba(80,150,179,0.3); border: 1px solid rgba(80,150,179,0.4); }
+
+  /* Waveform bars inside audio track */
+  .wave-mini {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    height: 100%;
+    padding: 3px 0;
+  }
+
+  .wave-mini .wb {
+    width: 2px;
+    border-radius: 1px;
+    opacity: 0.6;
+  }
+
+  /* Playhead */
+  .timeline-playhead {
+    position: absolute;
+    left: 35%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--error);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .timeline-playhead::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -4px;
+    width: 9px;
+    height: 9px;
+    background: var(--error);
+    clip-path: polygon(0 0, 100% 0, 50% 70%);
+  }
+
+  /* Cut markers on timeline */
+  .cut-region {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(248,81,73,0.08) 3px, rgba(248,81,73,0.08) 6px);
+    border-left: 1px dashed var(--error);
+    border-right: 1px dashed var(--error);
+    opacity: 0.5;
+  }
+
+  /* ═══════════════════════════════════════════════
+     SULLA SUGGESTIONS PANEL — floating
+     ═══════════════════════════════════════════════ */
+  .sulla-panel {
+    position: fixed;
+    bottom: 160px;
+    right: 440px;
+    width: 320px;
+    background: rgba(22,27,34,0.95);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    overflow: hidden;
+  }
+
+  .sulla-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    gap: 8px;
+  }
+
+  .sulla-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #7c3aed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+  }
+
+  .sulla-header-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .sulla-header .spacer { flex: 1; }
+
+  .sulla-dismiss {
+    width: 22px;
+    height: 22px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.12s;
+  }
+
+  .sulla-dismiss:hover { color: var(--text-primary); background: var(--bg-surface-hover); }
+
+  .sulla-body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .suggestion {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .suggestion:hover { border-color: var(--accent); }
+
+  .suggestion-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .suggestion-icon.filler { color: var(--error); }
+  .suggestion-icon.silence { color: var(--warning); }
+  .suggestion-icon.pacing { color: var(--info); }
+  .suggestion-icon.hook { color: var(--success); }
+
+  .suggestion-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .suggestion-text strong { color: var(--text-primary); font-weight: 600; }
+
+  .suggestion-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .sug-btn {
+    padding: 2px 8px;
+    font-size: 10px;
+    font-family: var(--mono);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .sug-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sug-btn.accept {
+    background: rgba(63,185,80,0.1);
+    border-color: rgba(63,185,80,0.3);
+    color: var(--success);
+  }
+
+  .sulla-footer {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: 6px;
+  }
+
+  .sulla-action {
+    flex: 1;
+    padding: 6px;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+  }
+
+  .sulla-action:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sulla-action.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .sulla-action.primary:hover { background: var(--accent-hover); }
+</style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ═══ TOP BAR ═══ -->
+    <div class="top-bar">
+      <div class="logo">sulla <span>/ video editor</span></div>
+      <div class="spacer"></div>
+      <div class="project-name">product-demo-april.sulla</div>
+      <div class="top-actions">
+        <button class="top-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Preview
+        </button>
+        <button class="top-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          History
+        </button>
+        <button class="top-btn primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ TRANSCRIPT ═══ -->
+    <div class="transcript-panel">
+      <div class="transcript-toolbar">
+        <button class="tool-btn active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Transcript
+        </button>
+        <button class="tool-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          Scenes
+        </button>
+        <div class="tool-divider"></div>
+        <button class="tool-btn danger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Remove Fillers
+          <span class="tool-badge">23</span>
+        </button>
+        <button class="tool-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+          Trim Silence
+          <span class="tool-badge warning">8</span>
+        </button>
+        <button class="tool-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          Studio Sound
+        </button>
+        <div class="tool-divider"></div>
+        <button class="tool-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4a2 2 0 0 1 2-2h8.5L20 7.5V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/><polyline points="14 2 14 8 20 8"/><path d="M2 15h10"/><path d="M9 18l3-3-3-3"/></svg>
+          Captions
+        </button>
+      </div>
+
+      <div class="transcript-body">
+        <!-- Speaker 1 -->
+        <div class="speaker-block">
+          <div class="speaker-label">
+            <div class="speaker-dot" style="background: var(--accent)"></div>
+            <span class="speaker-label-text">Speaker 1 — Jonathon</span>
+            <span class="speaker-timestamp">00:00</span>
+          </div>
+          <div class="transcript-text">
+            <span class="word played">Welcome</span> <span class="word played">everyone</span> <span class="word played">to</span> <span class="word played">today's</span> <span class="word played">product</span> <span class="word played">demo.</span> <span class="word current">I'm</span> <span class="word filler">um</span> <span class="word">really</span> <span class="word">excited</span> <span class="word">to</span> <span class="word">show</span> <span class="word">you</span> <span class="word">what</span> <span class="word">we've</span> <span class="word">been</span> <span class="word filler">like</span> <span class="word">building</span> <span class="word">over</span> <span class="word">the</span> <span class="word">past</span> <span class="word">few</span> <span class="word">weeks.</span> <span class="word silence-marker">[2.3s pause]</span> <span class="word">The</span> <span class="word">capture</span> <span class="word">studio</span> <span class="word">is</span> <span class="word filler">basically</span> <span class="word">a</span> <span class="word">new</span> <span class="word">feature</span> <span class="word">inside</span> <span class="word">Sulla</span> <span class="word">Desktop</span> <span class="word">that</span> <span class="word">lets</span> <span class="word">you</span> <span class="word">record</span> <span class="word">your</span> <span class="word">screen,</span> <span class="word">your</span> <span class="word">webcam,</span> <span class="word">your</span> <span class="word">microphone,</span> <span class="word">and</span> <span class="word">your</span> <span class="word">system</span> <span class="word">audio</span> <span class="word">all</span> <span class="word">at</span> <span class="word">the</span> <span class="word">same</span> <span class="word">time.</span>
+          </div>
+        </div>
+
+        <div class="scene-break">
+          <div class="scene-break-line"></div>
+          <div class="scene-break-label">Scene 2 — Feature Overview</div>
+          <div class="scene-break-line"></div>
+        </div>
+
+        <div class="speaker-block">
+          <div class="speaker-label">
+            <div class="speaker-dot" style="background: var(--accent)"></div>
+            <span class="speaker-label-text">Speaker 1 — Jonathon</span>
+            <span class="speaker-timestamp">00:34</span>
+          </div>
+          <div class="transcript-text">
+            <span class="word">This</span> <span class="word">means</span> <span class="word">you</span> <span class="word">can</span> <span class="word">edit</span> <span class="word">each</span> <span class="word">one</span> <span class="word">independently</span> <span class="word">later.</span> <span class="word filler">You know,</span> <span class="word">think</span> <span class="word">of</span> <span class="word">it</span> <span class="word">like</span> <span class="word">having</span> <span class="word">a</span> <span class="word">multi-camera</span> <span class="word">setup</span> <span class="word">but</span> <span class="word filler">um</span> <span class="word">right</span> <span class="word">from</span> <span class="word">your</span> <span class="word">laptop.</span> <span class="word silence-marker">[1.8s pause]</span> <span class="word">The</span> <span class="word">key</span> <span class="word">innovation</span> <span class="word">here</span> <span class="word">is</span> <span class="word">the</span> <span class="word">teleprompter.</span> <span class="word">Instead</span> <span class="word">of</span> <span class="word filler">like</span> <span class="word">looking</span> <span class="word">off</span> <span class="word">to</span> <span class="word">the</span> <span class="word">side</span> <span class="word">to</span> <span class="word">read</span> <span class="word">your</span> <span class="word">notes,</span> <span class="word">the</span> <span class="word">text</span> <span class="word">appears</span> <span class="word">right</span> <span class="word">near</span> <span class="word">your</span> <span class="word">camera.</span>
+          </div>
+        </div>
+
+        <div class="scene-break">
+          <div class="scene-break-line"></div>
+          <div class="scene-break-label">Scene 3 — Layout Demo</div>
+          <div class="scene-break-line"></div>
+        </div>
+
+        <div class="speaker-block">
+          <div class="speaker-label">
+            <div class="speaker-dot" style="background: var(--accent)"></div>
+            <span class="speaker-label-text">Speaker 1 — Jonathon</span>
+            <span class="speaker-timestamp">01:12</span>
+          </div>
+          <div class="transcript-text">
+            <span class="word">Let</span> <span class="word">me</span> <span class="word">show</span> <span class="word">you</span> <span class="word">how</span> <span class="word">the</span> <span class="word">layout</span> <span class="word">system</span> <span class="word">works.</span> <span class="word filler">So</span> <span class="word">you</span> <span class="word">can</span> <span class="word">switch</span> <span class="word">between</span> <span class="word">picture-in-picture</span> <span class="word">mode</span> <span class="word cut">where your camera appears as a small bubble</span> <span class="word">side-by-side</span> <span class="word">mode</span> <span class="word">for</span> <span class="word">interviews,</span> <span class="word">screen-only</span> <span class="word">mode</span> <span class="word">when</span> <span class="word">you</span> <span class="word">just</span> <span class="word">want</span> <span class="word">to</span> <span class="word">show</span> <span class="word">your</span> <span class="word">desktop,</span> <span class="word">and</span> <span class="word">camera-only</span> <span class="word">mode</span> <span class="word">for</span> <span class="word">direct-to-camera</span> <span class="word">content.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ VIDEO PREVIEW ═══ -->
+    <div class="preview-panel">
+      <div class="video-container">
+        <div class="video-frame">
+          <div class="placeholder-text">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Video Preview
+          </div>
+        </div>
+      </div>
+      <div class="speaker-info">
+        <div class="speaker-row">
+          <div class="speaker-avatar" style="background: var(--accent);">J</div>
+          <span class="speaker-name">Jonathon</span>
+          <span class="speaker-time">12:34 speaking time</span>
+        </div>
+      </div>
+      <div class="playback-bar">
+        <div class="scrubber">
+          <div class="scrubber-fill"></div>
+        </div>
+        <div class="playback-controls">
+          <button class="pb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+          </button>
+          <button class="play-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <button class="pb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+          </button>
+          <span class="time-display">04:23 / 12:47</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TIMELINE ═══ -->
+    <div class="timeline-panel">
+      <div class="timeline-header">
+        Timeline
+        <div class="spacer"></div>
+        <div class="timeline-zoom">
+          <button>-</button>
+          <button>+</button>
+        </div>
+      </div>
+
+      <div class="timeline-ruler">
+        <span class="ruler-mark" style="left: 80px;">00:00</span>
+        <span class="ruler-mark" style="left: 200px;">01:00</span>
+        <span class="ruler-mark" style="left: 320px;">02:00</span>
+        <span class="ruler-mark" style="left: 440px;">03:00</span>
+        <span class="ruler-mark" style="left: 560px;">04:00</span>
+        <span class="ruler-mark" style="left: 680px;">05:00</span>
+      </div>
+
+      <div class="timeline-tracks" style="position: relative;">
+        <div class="timeline-playhead"></div>
+
+        <div class="timeline-track">
+          <div class="track-label">
+            <div class="tl-color" style="background: var(--info);"></div>
+            Video
+          </div>
+          <div class="track-content">
+            <div class="track-clip video" style="left: 0; right: 5%;">main-recording.mp4</div>
+            <div class="cut-region" style="left: 62%; width: 4%;"></div>
+          </div>
+        </div>
+
+        <div class="timeline-track">
+          <div class="track-label">
+            <div class="tl-color" style="background: var(--success);"></div>
+            Audio
+          </div>
+          <div class="track-content">
+            <div class="track-clip audio" style="left: 0; right: 5%;">
+              <div class="wave-mini">
+                <div class="wb" style="height: 30%; background: var(--success);"></div>
+                <div class="wb" style="height: 60%; background: var(--success);"></div>
+                <div class="wb" style="height: 45%; background: var(--success);"></div>
+                <div class="wb" style="height: 80%; background: var(--success);"></div>
+                <div class="wb" style="height: 55%; background: var(--success);"></div>
+                <div class="wb" style="height: 70%; background: var(--success);"></div>
+                <div class="wb" style="height: 40%; background: var(--success);"></div>
+                <div class="wb" style="height: 90%; background: var(--success);"></div>
+                <div class="wb" style="height: 35%; background: var(--success);"></div>
+                <div class="wb" style="height: 65%; background: var(--success);"></div>
+                <div class="wb" style="height: 50%; background: var(--success);"></div>
+                <div class="wb" style="height: 75%; background: var(--success);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="timeline-track">
+          <div class="track-label">
+            <div class="tl-color" style="background: var(--accent);"></div>
+            Captions
+          </div>
+          <div class="track-content">
+            <div class="track-clip caption" style="left: 2%; width: 12%;">Welcome everyone...</div>
+            <div class="track-clip caption" style="left: 16%; width: 15%;">The capture studio...</div>
+            <div class="track-clip caption" style="left: 34%; width: 14%;">This means you can...</div>
+            <div class="track-clip caption" style="left: 50%; width: 12%;">The key innovation...</div>
+            <div class="track-clip caption" style="left: 64%; width: 16%;">Let me show you...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SULLA SUGGESTIONS ═══ -->
+  <div class="sulla-panel">
+    <div class="sulla-header">
+      <div class="sulla-avatar">S</div>
+      <span class="sulla-header-text">Sulla Suggestions</span>
+      <div class="spacer"></div>
+      <button class="sulla-dismiss">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="sulla-body">
+      <div class="suggestion">
+        <svg class="suggestion-icon filler" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <div>
+          <div class="suggestion-text"><strong>23 filler words</strong> detected — "um" (8), "like" (6), "basically" (4), "you know" (3), "so" (2)</div>
+          <div class="suggestion-actions">
+            <button class="sug-btn accept">Remove all</button>
+            <button class="sug-btn">Review each</button>
+          </div>
+        </div>
+      </div>
+      <div class="suggestion">
+        <svg class="suggestion-icon silence" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+        <div>
+          <div class="suggestion-text"><strong>8 long pauses</strong> (>1.5s) — total 18.4s of dead air could be trimmed</div>
+          <div class="suggestion-actions">
+            <button class="sug-btn accept">Trim all</button>
+            <button class="sug-btn">Review</button>
+          </div>
+        </div>
+      </div>
+      <div class="suggestion">
+        <svg class="suggestion-icon hook" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <div>
+          <div class="suggestion-text"><strong>Weak hook</strong> — opening 3s is slow. Consider starting at "The capture studio is a new feature..." (00:14)</div>
+          <div class="suggestion-actions">
+            <button class="sug-btn accept">Apply</button>
+            <button class="sug-btn">Ignore</button>
+          </div>
+        </div>
+      </div>
+      <div class="suggestion">
+        <svg class="suggestion-icon pacing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <div>
+          <div class="suggestion-text"><strong>Pacing dip</strong> at 01:45-02:10 — repetitive explanation. Suggest tightening by 12s.</div>
+          <div class="suggestion-actions">
+            <button class="sug-btn">Show region</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sulla-footer">
+      <button class="sulla-action">Ask Sulla...</button>
+      <button class="sulla-action primary">Apply All</button>
+    </div>
+  </div>
+</body>
+</html>

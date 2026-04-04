@@ -1,0 +1,8 @@
+{
+  "name": "sulla-video-editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-driven video editor powered by Sulla — programmatic composition meets transcript-based editing",
+  "license": "UNLICENSED",
+  "scripts": {}
+}

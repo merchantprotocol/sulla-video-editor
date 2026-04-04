@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulla Video Editor — Interactive Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-page:          #f6f8fa;
+    --bg-surface:       #ffffff;
+    --bg-elevated:      #f0f2f5;
+    --bg-hover:         #e8ebef;
+    --bg-doc:           #ffffff;
+    --text-primary:     #1f2328;
+    --text-secondary:   #59636e;
+    --text-muted:       #8b949e;
+    --text-dim:         #b1bac4;
+    --accent:           #3a7f9e;
+    --accent-soft:      rgba(58,127,158,0.08);
+    --accent-hover:     #2d6a85;
+    --red:              #cf222e;
+    --red-soft:         rgba(207,34,46,0.06);
+    --green:            #1a7f37;
+    --green-soft:       rgba(26,127,55,0.06);
+    --yellow:           #9a6700;
+    --yellow-soft:      rgba(154,103,0,0.06);
+    --border:           #e8ebef;
+    --border-visible:   #d1d9e0;
+    --sans:             'Inter', -apple-system, sans-serif;
+    --mono:             'JetBrains Mono', monospace;
+  }
+
+  body { background: var(--bg-page); color: var(--text-primary); font-family: var(--sans); font-size: 14px; line-height: 1.5; height: 100vh; overflow: hidden; }
+
+  .app { height: 100vh; display: grid; grid-template-columns: 1fr 380px; grid-template-rows: 48px 1fr auto; }
+
+  /* ═══ TOP BAR ═══ */
+  .top-bar { grid-column: 1 / -1; display: flex; align-items: center; padding: 0 20px; background: var(--bg-surface); border-bottom: 1px solid var(--border); gap: 16px; }
+  .logo { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+  .breadcrumb { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .breadcrumb span { color: var(--text-dim); }
+  .breadcrumb strong { color: var(--text-secondary); font-weight: 500; }
+  .spacer { flex: 1; }
+
+  .cleanup-summary { display: flex; align-items: center; gap: 12px; padding: 4px 12px; background: var(--red-soft); border: 1px solid rgba(207,34,46,0.12); border-radius: 8px; transition: all 0.3s; }
+  .cleanup-summary.clean { background: var(--green-soft); border-color: rgba(26,127,55,0.12); }
+  .cleanup-stat { display: flex; align-items: center; gap: 5px; font-size: 11px; font-family: var(--mono); }
+  .cleanup-stat .num { font-weight: 700; color: var(--red); font-size: 13px; transition: color 0.3s; }
+  .cleanup-summary.clean .num { color: var(--green); }
+  .cleanup-stat .label { color: var(--text-muted); }
+  .cleanup-divider { width: 1px; height: 16px; background: rgba(207,34,46,0.12); }
+  .cleanup-summary.clean .cleanup-divider { background: rgba(26,127,55,0.12); }
+  .cleanup-btn { padding: 4px 10px; background: var(--red); border: none; border-radius: 5px; color: white; font-family: var(--sans); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .cleanup-btn:hover { filter: brightness(1.1); }
+  .cleanup-btn.done { background: var(--green); }
+
+  .top-btn { padding: 6px 14px; background: var(--accent); border: none; border-radius: 6px; color: white; font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.12s; }
+  .top-btn:hover { background: var(--accent-hover); }
+  .top-btn svg { width: 14px; height: 14px; }
+
+  /* ═══ TRANSCRIPT AREA ═══ */
+  .transcript-area { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-doc); }
+
+  .doc-toolbar { display: flex; align-items: center; padding: 6px 32px; gap: 2px; border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+  .tb-group { display: flex; align-items: center; gap: 1px; padding: 0 4px; }
+  .tb-group + .tb-group { border-left: 1px solid var(--border); margin-left: 4px; padding-left: 8px; }
+
+  .tb-btn { width: 28px; height: 28px; background: none; border: none; border-radius: 5px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.1s; position: relative; }
+  .tb-btn:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .tb-btn.active { color: var(--accent); background: var(--accent-soft); }
+  .tb-btn svg { width: 15px; height: 15px; }
+  .tb-btn .badge { position: absolute; top: 1px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--red); border: 1.5px solid var(--bg-surface); transition: opacity 0.2s; }
+  .tb-btn .badge.hidden { opacity: 0; }
+  .tb-btn .tip { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font-size: 10px; white-space: nowrap; color: var(--text-secondary); background: var(--text-primary); padding: 3px 8px; border-radius: 4px; opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 50; color: white; }
+  .tb-btn:hover .tip { opacity: 1; }
+
+  .tb-label { font-size: 11px; color: var(--text-dim); padding: 0 6px; white-space: nowrap; font-family: var(--mono); font-size: 10px; }
+
+  /* Document */
+  .doc-scroll { flex: 1; overflow-y: auto; padding: 40px 0; }
+  .doc-scroll::-webkit-scrollbar { width: 8px; }
+  .doc-scroll::-webkit-scrollbar-track { background: transparent; }
+  .doc-scroll::-webkit-scrollbar-thumb { background: var(--border-visible); border-radius: 4px; }
+  .doc-content { max-width: 680px; margin: 0 auto; padding: 0 40px; }
+
+  .speaker-block { margin-bottom: 32px; position: relative; }
+  .speaker-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .speaker-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); border: 1.5px solid rgba(58,127,158,0.25); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--accent); }
+  .speaker-info { display: flex; flex-direction: column; }
+  .speaker-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .speaker-time { font-size: 11px; font-family: var(--mono); color: var(--text-dim); cursor: pointer; }
+  .speaker-time:hover { color: var(--accent); }
+
+  .transcript-text { font-size: 16px; line-height: 2; color: var(--text-primary); font-weight: 400; }
+
+  .w { display: inline; cursor: text; border-radius: 2px; transition: all 0.15s; }
+  .w:hover { background: rgba(0,0,0,0.04); }
+  .w.played { color: var(--text-muted); }
+  .w.current { background: var(--accent-soft); color: var(--accent); font-weight: 500; padding: 1px 2px; border-radius: 3px; }
+  .w.filler { color: var(--red); text-decoration: underline; text-decoration-color: var(--red); text-decoration-style: wavy; text-underline-offset: 3px; opacity: 0.7; cursor: pointer; }
+  .w.filler.hidden-filler { display: none; }
+  .w.cut { text-decoration: line-through; color: var(--text-dim); opacity: 0.3; }
+  .w.filler-removed { text-decoration: line-through; color: var(--text-dim); opacity: 0.2; font-size: 12px; transition: all 0.3s; }
+
+  .silence { display: inline-flex; align-items: center; gap: 3px; padding: 0 4px; font-size: 10px; font-family: var(--mono); color: var(--yellow); opacity: 0.6; vertical-align: baseline; cursor: pointer; border-radius: 3px; transition: all 0.15s; }
+  .silence:hover { background: var(--yellow-soft); opacity: 1; }
+  .silence::before { content: ''; width: 12px; height: 1px; background: var(--yellow); opacity: 0.5; }
+  .silence.trimmed { text-decoration: line-through; opacity: 0.25; color: var(--text-dim); }
+
+  .scene-divider { display: flex; align-items: center; gap: 12px; margin: 28px 0; }
+  .scene-line { flex: 1; height: 1px; background: var(--border); }
+  .scene-label { font-size: 11px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* ═══ RIGHT PANEL ═══ */
+  .right-panel { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; background: var(--bg-surface); border-left: 1px solid var(--border); position: relative; }
+
+  .video-section { background: #1a1d21; padding: 16px; }
+  .video-frame { width: 100%; aspect-ratio: 16/9; background: #2a2d31; border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .video-frame .ph { color: #666; font-size: 11px; text-align: center; }
+  .video-frame .ph svg { display: block; margin: 0 auto 6px; opacity: 0.3; }
+
+  .video-controls { display: flex; align-items: center; gap: 8px; padding: 10px 0 0; }
+  .play-btn { width: 32px; height: 32px; background: var(--accent); border: none; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.12s; flex-shrink: 0; }
+  .play-btn:hover { transform: scale(1.05); }
+  .play-btn svg { width: 14px; height: 14px; margin-left: 1px; }
+  .scrub-bar { flex: 1; height: 3px; background: rgba(255,255,255,0.15); border-radius: 2px; cursor: pointer; }
+  .scrub-fill { width: 35%; height: 100%; background: rgba(255,255,255,0.7); border-radius: 2px; transition: width 0.3s; }
+  .time-label { font-size: 11px; font-family: var(--mono); color: #888; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+  /* Right panel sections */
+  .sulla-section { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .sulla-section::-webkit-scrollbar { width: 5px; }
+  .sulla-section::-webkit-scrollbar-track { background: transparent; }
+  .sulla-section::-webkit-scrollbar-thumb { background: var(--border-visible); border-radius: 3px; }
+
+  .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
+  .panel-section.collapsed .section-body { display: none; }
+  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer; }
+  .panel-section.collapsed .section-header { margin-bottom: 0; }
+  .section-icon { width: 20px; height: 20px; color: var(--text-muted); }
+  .section-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .section-header .spacer { flex: 1; }
+  .section-badge { font-size: 10px; font-family: var(--mono); font-weight: 600; padding: 1px 6px; border-radius: 10px; }
+  .section-badge.red { background: var(--red-soft); color: var(--red); }
+  .section-badge.yellow { background: var(--yellow-soft); color: var(--yellow); }
+  .section-badge.green { background: var(--green-soft); color: var(--green); }
+  .section-chevron { width: 14px; height: 14px; color: var(--text-dim); transition: transform 0.2s; }
+  .panel-section.collapsed .section-chevron { transform: rotate(-90deg); }
+
+  .suggestion-list { display: flex; flex-direction: column; gap: 6px; }
+  .sug-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-elevated); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+  .sug-card:hover { background: var(--bg-hover); }
+  .sug-card.done { opacity: 0.4; }
+  .sug-card.done .sug-action { display: none; }
+  .sug-indicator { width: 3px; height: 28px; border-radius: 2px; flex-shrink: 0; }
+  .sug-indicator.red { background: var(--red); }
+  .sug-indicator.yellow { background: var(--yellow); }
+  .sug-indicator.blue { background: var(--accent); }
+  .sug-indicator.green { background: var(--green); }
+  .sug-content { flex: 1; min-width: 0; }
+  .sug-title { font-size: 12px; font-weight: 500; color: var(--text-primary); margin-bottom: 1px; }
+  .sug-desc { font-size: 11px; color: var(--text-muted); }
+  .sug-done-label { font-size: 10px; color: var(--green); font-weight: 600; display: none; }
+  .sug-card.done .sug-done-label { display: block; }
+  .sug-action { padding: 4px 10px; background: none; border: 1px solid var(--border-visible); border-radius: 5px; color: var(--text-secondary); font-family: var(--sans); font-size: 10px; font-weight: 500; cursor: pointer; flex-shrink: 0; transition: all 0.12s; }
+  .sug-action:hover { border-color: var(--accent); color: var(--accent); }
+  .sug-action.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .sug-action.primary:hover { background: var(--accent-hover); }
+
+  /* ═══ PANELS (Captions, Clips, Export) — slide over right panel ═══ */
+  .overlay-panel { position: absolute; inset: 0; background: var(--bg-surface); z-index: 20; display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.25s ease; }
+  .overlay-panel.open { transform: translateX(0); }
+
+  .overlay-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); gap: 10px; }
+  .overlay-header h3 { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .overlay-header .spacer { flex: 1; }
+  .overlay-close { width: 28px; height: 28px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.12s; }
+  .overlay-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .overlay-close svg { width: 16px; height: 16px; }
+  .overlay-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+  /* Captions panel */
+  .caption-style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .caption-style-card { padding: 16px 12px; background: var(--bg-elevated); border: 2px solid transparent; border-radius: 10px; text-align: center; cursor: pointer; transition: all 0.12s; }
+  .caption-style-card:hover { border-color: var(--border-visible); }
+  .caption-style-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .caption-style-card .demo-text { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .caption-style-card .style-name { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .option-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .option-label { font-size: 12px; color: var(--text-secondary); }
+  .option-value { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+  .toggle { width: 36px; height: 20px; background: var(--bg-hover); border: 1px solid var(--border-visible); border-radius: 10px; position: relative; cursor: pointer; transition: all 0.2s; }
+  .toggle.on { background: var(--accent-soft); border-color: var(--accent); }
+  .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); top: 2px; left: 2px; transition: all 0.2s; }
+  .toggle.on::after { left: 18px; background: var(--accent); }
+
+  /* Clips panel */
+  .clip-card { display: flex; gap: 10px; padding: 10px; background: var(--bg-elevated); border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.12s; border: 1px solid transparent; }
+  .clip-card:hover { border-color: var(--border-visible); }
+  .clip-thumb { width: 72px; height: 40px; background: var(--bg-hover); border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text-dim); position: relative; }
+  .clip-thumb .dur { position: absolute; bottom: 2px; right: 2px; font-size: 8px; padding: 0 3px; background: rgba(0,0,0,0.6); color: white; border-radius: 2px; font-family: var(--mono); }
+  .clip-info { flex: 1; }
+  .clip-title { font-size: 11px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; line-height: 1.3; }
+  .clip-meta { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .virality { font-weight: 600; }
+  .virality.high { color: var(--green); }
+  .virality.med { color: var(--yellow); }
+
+  /* Export panel */
+  .export-format { display: flex; gap: 6px; margin-bottom: 16px; }
+  .fmt-chip { padding: 6px 14px; border: 1px solid var(--border-visible); border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.12s; background: none; }
+  .fmt-chip:hover { border-color: var(--accent); }
+  .fmt-chip.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .export-go { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: white; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 16px; transition: all 0.12s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .export-go:hover { background: var(--accent-hover); }
+  .export-go svg { width: 16px; height: 16px; }
+
+  /* ═══ RESIZE HANDLES ═══ */
+  .resize-handle { position: absolute; z-index: 30; }
+  .resize-handle::after { content: ''; position: absolute; background: transparent; transition: background 0.15s; }
+  .resize-handle:hover::after, .resize-handle.active::after { background: var(--accent); }
+
+  .resize-handle-right { top: 0; bottom: 0; width: 10px; right: -5px; cursor: col-resize; }
+  .resize-handle-right::after { top: 0; bottom: 0; left: 4px; width: 2px; border-radius: 1px; }
+
+  .resize-handle-top { left: 0; right: 0; height: 10px; top: -5px; cursor: row-resize; }
+  .resize-handle-top::after { left: 0; right: 0; top: 4px; height: 2px; border-radius: 1px; }
+
+  /* Make transcript area position relative for the handle */
+  .transcript-area { position: relative; }
+  .track-panel { position: relative; }
+
+  /* ═══ TRACK PANEL ═══ */
+  .track-panel { grid-column: 1 / -1; grid-row: 3; background: var(--bg-surface); border-top: 1px solid var(--border); display: flex; flex-direction: column; position: relative; }
+  .track-panel.collapsed { height: 36px !important; overflow: hidden; }
+  .track-panel.resizing { transition: none !important; }
+
+  .track-panel-bar { display: flex; align-items: center; padding: 0 12px; height: 36px; border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 8px; }
+  .tp-toggle { width: 24px; height: 24px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 5px; transition: all 0.12s; }
+  .tp-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .tp-toggle svg { width: 14px; height: 14px; transition: transform 0.2s; }
+  .track-panel.collapsed .tp-toggle svg { transform: rotate(180deg); }
+  .tp-title { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .tp-spacer { flex: 1; }
+  .tp-time { font-size: 12px; font-family: var(--mono); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .tp-transport { display: flex; align-items: center; gap: 2px; }
+  .tp-btn { width: 26px; height: 26px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 5px; transition: all 0.12s; }
+  .tp-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .tp-btn svg { width: 14px; height: 14px; }
+  .tp-play { width: 28px; height: 28px; background: var(--accent); border: none; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
+  .tp-play:hover { background: var(--accent-hover); }
+  .tp-play svg { width: 12px; height: 12px; margin-left: 1px; }
+  .tp-zoom { display: flex; align-items: center; gap: 2px; }
+  .tp-zoom-btn { width: 22px; height: 22px; background: none; border: 1px solid var(--border-visible); border-radius: 4px; color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; font-family: var(--mono); }
+  .tp-zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .track-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+
+  /* Ruler */
+  .track-ruler { height: 22px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; padding-left: 140px; position: relative; flex-shrink: 0; }
+  .ruler-mark { position: absolute; bottom: 3px; font-size: 9px; font-family: var(--mono); color: var(--text-dim); }
+  .ruler-mark::before { content: ''; position: absolute; top: -6px; left: 0; width: 1px; height: 5px; background: var(--border-visible); }
+  .ruler-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--red); z-index: 5; pointer-events: none; left: 35%; }
+  .ruler-playhead::after { content: ''; position: absolute; top: 0; left: -4px; width: 9px; height: 8px; background: var(--red); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+
+  /* Track rows */
+  .track-rows { flex: 1; overflow-y: auto; }
+  .track-row { display: flex; align-items: center; height: 38px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .track-row:hover { background: rgba(0,0,0,0.015); }
+  .track-row.selected { background: var(--accent-soft); }
+  .track-row.muted { opacity: 0.35; }
+
+  .track-meta { width: 140px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; flex-shrink: 0; border-right: 1px solid var(--border); height: 100%; }
+  .track-color { width: 3px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+  .track-icon { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+  .track-name { font-size: 11px; color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .track-controls { display: flex; align-items: center; gap: 1px; }
+  .trk-btn { width: 20px; height: 20px; background: none; border: 1px solid transparent; border-radius: 3px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 8px; font-family: var(--mono); font-weight: 700; transition: all 0.1s; }
+  .trk-btn:hover { border-color: var(--border-visible); color: var(--text-secondary); }
+  .trk-btn.active-mute { background: var(--red-soft); border-color: rgba(207,34,46,0.2); color: var(--red); }
+  .trk-btn.active-solo { background: var(--yellow-soft); border-color: rgba(154,103,0,0.2); color: var(--yellow); }
+
+  .track-content { flex: 1; height: 100%; position: relative; overflow: hidden; }
+  .track-clip { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; display: flex; align-items: center; overflow: hidden; }
+  .track-clip.video-clip { background: rgba(58,127,158,0.12); border: 1px solid rgba(58,127,158,0.25); }
+  .track-clip.camera-clip { background: rgba(120,90,220,0.1); border: 1px solid rgba(120,90,220,0.25); }
+  .track-clip.mic-clip { background: rgba(26,127,55,0.1); border: 1px solid rgba(26,127,55,0.25); }
+  .track-clip.sys-clip { background: rgba(154,103,0,0.1); border: 1px solid rgba(154,103,0,0.2); }
+  .track-clip .clip-label { font-size: 8px; color: var(--text-muted); padding: 0 6px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+
+  /* Waveform bars */
+  .wave-bars { display: flex; align-items: center; gap: 1px; height: 100%; padding: 5px 4px; }
+  .wave-bars .wb { width: 2px; border-radius: 1px; flex-shrink: 0; }
+
+  /* Cut regions on tracks */
+  .track-cut { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(207,34,46,0.06) 2px, rgba(207,34,46,0.06) 4px); border-left: 1px dashed rgba(207,34,46,0.3); border-right: 1px dashed rgba(207,34,46,0.3); }
+
+  /* Track playhead line */
+  .track-playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--red); z-index: 5; pointer-events: none; left: 35%; }
+
+  /* Volume slider */
+  .vol-slider { width: 50px; height: 3px; accent-color: var(--accent); cursor: pointer; margin: 0 4px; }
+
+  /* Toast notification */
+  .toast { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%) translateY(20px); padding: 8px 18px; background: var(--text-primary); color: white; font-size: 12px; font-weight: 500; border-radius: 8px; opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ═══ TOP BAR ═══ -->
+    <div class="top-bar">
+      <div class="logo">sulla</div>
+      <div class="breadcrumb"><span>/</span> <strong>product-demo-april</strong></div>
+      <div class="spacer"></div>
+      <div class="cleanup-summary" id="cleanup-summary">
+        <div class="cleanup-stat"><span class="num" id="filler-count">23</span> <span class="label">fillers</span></div>
+        <div class="cleanup-divider"></div>
+        <div class="cleanup-stat"><span class="num" id="pause-count">8</span> <span class="label">pauses</span></div>
+        <div class="cleanup-divider"></div>
+        <button class="cleanup-btn" id="clean-all-btn" onclick="cleanAll()">Clean All</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="top-btn" onclick="openPanel('export-panel')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+    </div>
+
+    <!-- ═══ TRANSCRIPT ═══ -->
+    <div class="transcript-area">
+      <div class="doc-toolbar">
+        <div class="tb-group">
+          <button class="tb-btn" title="Undo" onclick="toast('Undo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span class="tip">Undo</span></button>
+          <button class="tb-btn" title="Redo" onclick="toast('Redo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg><span class="tip">Redo</span></button>
+        </div>
+        <div class="tb-group">
+          <button class="tb-btn active" id="tb-fillers" title="Show fillers" onclick="toggleFillers(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            <span class="badge" id="filler-badge"></span>
+            <span class="tip">Toggle Fillers</span>
+          </button>
+          <button class="tb-btn" id="tb-pauses" title="Show pauses" onclick="togglePauses(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            <span class="tip">Toggle Pauses</span>
+          </button>
+          <button class="tb-btn" id="tb-scenes" title="Scenes" onclick="toggleScenes(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span class="tip">Scene Breaks</span>
+          </button>
+        </div>
+        <div class="tb-group">
+          <button class="tb-btn" title="Captions" onclick="openPanel('captions-panel')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg>
+            <span class="tip">Captions</span>
+          </button>
+          <button class="tb-btn" title="Studio sound" onclick="applyStudioSound()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span class="tip">Studio Sound</span>
+          </button>
+          <button class="tb-btn" title="Auto clips" onclick="openPanel('clips-panel')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M10 2v20"/><path d="M2 12h8"/></svg>
+            <span class="tip">Auto Clips</span>
+          </button>
+          <button class="tb-btn" title="Translate" onclick="toast('Translation: coming soon')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
+            <span class="tip">Translate</span>
+          </button>
+        </div>
+        <div class="tb-group">
+          <button class="tb-btn" title="Ask Sulla" onclick="toast('Sulla: What would you like me to do?')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="tip">Ask Sulla</span>
+          </button>
+        </div>
+        <span class="spacer"></span>
+        <span class="tb-label" id="word-count">3,247 words &middot; 12:47</span>
+      </div>
+
+      <div class="doc-scroll">
+        <div class="doc-content" id="doc-content">
+
+          <div class="speaker-block">
+            <div class="speaker-header">
+              <div class="speaker-avatar">J</div>
+              <div class="speaker-info">
+                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-time" onclick="toast('Seeking to 00:00')">00:00</div>
+              </div>
+            </div>
+            <div class="transcript-text">
+              <span class="w played">Welcome</span> <span class="w played">everyone</span> <span class="w played">to</span> <span class="w played">today's</span> <span class="w played">product</span> <span class="w played">demo.</span> <span class="w current">I'm</span> <span class="w filler" onclick="removeFiller(this)">um</span> <span class="w">really</span> <span class="w">excited</span> <span class="w">to</span> <span class="w">show</span> <span class="w">you</span> <span class="w">what</span> <span class="w">we've</span> <span class="w">been</span> <span class="w filler" onclick="removeFiller(this)">like</span> <span class="w">building</span> <span class="w">over</span> <span class="w">the</span> <span class="w">past</span> <span class="w">few</span> <span class="w">weeks.</span> <span class="silence" onclick="trimSilence(this)">2.3s</span> <span class="w">The</span> <span class="w">capture</span> <span class="w">studio</span> <span class="w">is</span> <span class="w filler" onclick="removeFiller(this)">basically</span> <span class="w">a</span> <span class="w">new</span> <span class="w">feature</span> <span class="w">inside</span> <span class="w">Sulla</span> <span class="w">Desktop</span> <span class="w">that</span> <span class="w">lets</span> <span class="w">you</span> <span class="w">record</span> <span class="w">your</span> <span class="w">screen,</span> <span class="w">your</span> <span class="w">webcam,</span> <span class="w">your</span> <span class="w">microphone,</span> <span class="w">and</span> <span class="w">your</span> <span class="w">system</span> <span class="w">audio</span> <span class="w">all</span> <span class="w">at</span> <span class="w">the</span> <span class="w">same</span> <span class="w">time.</span>
+            </div>
+          </div>
+
+          <div class="scene-divider"><div class="scene-line"></div><div class="scene-label">Scene 2</div><div class="scene-line"></div></div>
+
+          <div class="speaker-block">
+            <div class="speaker-header">
+              <div class="speaker-avatar">J</div>
+              <div class="speaker-info">
+                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-time" onclick="toast('Seeking to 00:34')">00:34</div>
+              </div>
+            </div>
+            <div class="transcript-text">
+              <span class="w">This</span> <span class="w">means</span> <span class="w">you</span> <span class="w">can</span> <span class="w">edit</span> <span class="w">each</span> <span class="w">one</span> <span class="w">independently</span> <span class="w">later.</span> <span class="w filler" onclick="removeFiller(this)">You know,</span> <span class="w">think</span> <span class="w">of</span> <span class="w">it</span> <span class="w">like</span> <span class="w">having</span> <span class="w">a</span> <span class="w">multi-camera</span> <span class="w">setup</span> <span class="w">but</span> <span class="w filler" onclick="removeFiller(this)">um</span> <span class="w">right</span> <span class="w">from</span> <span class="w">your</span> <span class="w">laptop.</span> <span class="silence" onclick="trimSilence(this)">1.8s</span> <span class="w">The</span> <span class="w">key</span> <span class="w">innovation</span> <span class="w">here</span> <span class="w">is</span> <span class="w">the</span> <span class="w">teleprompter.</span> <span class="w">Instead</span> <span class="w">of</span> <span class="w filler" onclick="removeFiller(this)">like</span> <span class="w">looking</span> <span class="w">off</span> <span class="w">to</span> <span class="w">the</span> <span class="w">side</span> <span class="w">to</span> <span class="w">read</span> <span class="w">your</span> <span class="w">notes,</span> <span class="w">the</span> <span class="w">text</span> <span class="w">appears</span> <span class="w">right</span> <span class="w">near</span> <span class="w">your</span> <span class="w">camera.</span>
+            </div>
+          </div>
+
+          <div class="scene-divider"><div class="scene-line"></div><div class="scene-label">Scene 3</div><div class="scene-line"></div></div>
+
+          <div class="speaker-block">
+            <div class="speaker-header">
+              <div class="speaker-avatar">J</div>
+              <div class="speaker-info">
+                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-time" onclick="toast('Seeking to 01:12')">01:12</div>
+              </div>
+            </div>
+            <div class="transcript-text">
+              <span class="w">Let</span> <span class="w">me</span> <span class="w">show</span> <span class="w">you</span> <span class="w">how</span> <span class="w">the</span> <span class="w">layout</span> <span class="w">system</span> <span class="w">works.</span> <span class="w filler" onclick="removeFiller(this)">So</span> <span class="w">you</span> <span class="w">can</span> <span class="w">switch</span> <span class="w">between</span> <span class="w">picture-in-picture</span> <span class="w">mode</span> <span class="w cut">where your camera appears as a small bubble</span> <span class="w">side-by-side</span> <span class="w">mode</span> <span class="w">for</span> <span class="w">interviews,</span> <span class="silence" onclick="trimSilence(this)">1.5s</span> <span class="w">screen-only</span> <span class="w">mode</span> <span class="w">when</span> <span class="w">you</span> <span class="w">just</span> <span class="w">want</span> <span class="w">to</span> <span class="w">show</span> <span class="w">your</span> <span class="w">desktop,</span> <span class="w">and</span> <span class="w">camera-only</span> <span class="w">mode</span> <span class="w">for</span> <span class="w">direct-to-camera</span> <span class="w">content.</span>
+            </div>
+          </div>
+
+          <div class="scene-divider"><div class="scene-line"></div><div class="scene-label">Scene 4</div><div class="scene-line"></div></div>
+
+          <div class="speaker-block">
+            <div class="speaker-header">
+              <div class="speaker-avatar">J</div>
+              <div class="speaker-info">
+                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-time" onclick="toast('Seeking to 01:58')">01:58</div>
+              </div>
+            </div>
+            <div class="transcript-text">
+              <span class="w">Each</span> <span class="w">video</span> <span class="w">source</span> <span class="w">can</span> <span class="w">be</span> <span class="w">toggled</span> <span class="w">on</span> <span class="w">and</span> <span class="w">off</span> <span class="w">independently.</span> <span class="w">You</span> <span class="w">can</span> <span class="w">add</span> <span class="w">new</span> <span class="w">sources</span> <span class="w filler" onclick="removeFiller(this)">like</span> <span class="w">a</span> <span class="w">phone</span> <span class="w">camera</span> <span class="w">for</span> <span class="w">vertical</span> <span class="w">content</span> <span class="w">or</span> <span class="w">a</span> <span class="w">second</span> <span class="w">screen</span> <span class="w">capture.</span> <span class="silence" onclick="trimSilence(this)">2.1s</span> <span class="w">The</span> <span class="w">system</span> <span class="w filler" onclick="removeFiller(this)">basically</span> <span class="w">automatically</span> <span class="w">picks</span> <span class="w">the</span> <span class="w">best</span> <span class="w">layout</span> <span class="w">based</span> <span class="w">on</span> <span class="w">which</span> <span class="w">sources</span> <span class="w">are</span> <span class="w">active.</span> <span class="silence" onclick="trimSilence(this)">3.2s</span> <span class="w">If</span> <span class="w">you</span> <span class="w">turn</span> <span class="w">off</span> <span class="w">your</span> <span class="w">screen</span> <span class="w">and</span> <span class="w filler" onclick="removeFiller(this)">um</span> <span class="w">only</span> <span class="w">have</span> <span class="w">your</span> <span class="w">camera</span> <span class="w">running</span> <span class="w">it</span> <span class="w">switches</span> <span class="w">to</span> <span class="w">full-screen</span> <span class="w">camera</span> <span class="w filler" onclick="removeFiller(this)">you know</span> <span class="w">automatically.</span>
+            </div>
+          </div>
+
+          <div class="scene-divider"><div class="scene-line"></div><div class="scene-label">Scene 5</div><div class="scene-line"></div></div>
+
+          <div class="speaker-block">
+            <div class="speaker-header">
+              <div class="speaker-avatar">J</div>
+              <div class="speaker-info">
+                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-time" onclick="toast('Seeking to 03:22')">03:22</div>
+              </div>
+            </div>
+            <div class="transcript-text">
+              <span class="w">Now</span> <span class="w">let</span> <span class="w">me</span> <span class="w">walk</span> <span class="w">you</span> <span class="w">through</span> <span class="w">the</span> <span class="w">recording</span> <span class="w">workflow.</span> <span class="w">You</span> <span class="w">hit</span> <span class="w">the</span> <span class="w">record</span> <span class="w">button</span> <span class="w">and</span> <span class="w filler" onclick="removeFiller(this)">like</span> <span class="w">all</span> <span class="w">active</span> <span class="w">sources</span> <span class="w">start</span> <span class="w">capturing</span> <span class="w filler" onclick="removeFiller(this)">um</span> <span class="w">simultaneously.</span> <span class="silence" onclick="trimSilence(this)">1.9s</span> <span class="w">The</span> <span class="w">audio</span> <span class="w">driver</span> <span class="w">handles</span> <span class="w">microphone</span> <span class="w">and</span> <span class="w">system</span> <span class="w">audio</span> <span class="w">capture</span> <span class="w filler" onclick="removeFiller(this)">basically</span> <span class="w">separately</span> <span class="w">so</span> <span class="w">you</span> <span class="w">get</span> <span class="w">clean</span> <span class="w">isolated</span> <span class="w">tracks.</span> <span class="silence" onclick="trimSilence(this)">2.8s</span> <span class="w">After</span> <span class="w">you</span> <span class="w">stop</span> <span class="w">recording</span> <span class="w filler" onclick="removeFiller(this)">um</span> <span class="w">everything</span> <span class="w">gets</span> <span class="w">saved</span> <span class="w">as</span> <span class="w">separate</span> <span class="w">files.</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ RIGHT PANEL ═══ -->
+    <div class="right-panel" id="right-panel" style="position: relative;">
+      <div class="resize-handle resize-handle-right" id="resize-right" style="right:auto;left:-5px;"></div>
+      <div class="video-section">
+        <div class="video-frame"><div class="ph"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>Video Preview</div></div>
+        <div class="video-controls">
+          <button class="play-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+          <div class="scrub-bar"><div class="scrub-fill" id="scrub-fill"></div></div>
+          <span class="time-label" id="time-label">4:23 / 12:47</span>
+        </div>
+      </div>
+
+      <div class="sulla-section">
+        <div class="panel-section" id="suggestions-section">
+          <div class="section-header" onclick="toggleSection('suggestions-section')">
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span class="section-title">Sulla Suggestions</span>
+            <div class="spacer"></div>
+            <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="section-body">
+            <div class="suggestion-list">
+              <div class="sug-card" id="sug-fillers">
+                <div class="sug-indicator red"></div>
+                <div class="sug-content">
+                  <div class="sug-title">23 filler words found</div>
+                  <div class="sug-desc">um, like, basically, you know, so</div>
+                </div>
+                <span class="sug-done-label">Done</span>
+                <button class="sug-action primary" onclick="removeAllFillers()">Fix</button>
+              </div>
+              <div class="sug-card" id="sug-pauses">
+                <div class="sug-indicator yellow"></div>
+                <div class="sug-content">
+                  <div class="sug-title">8 long pauses</div>
+                  <div class="sug-desc">18.4s of dead air can be trimmed</div>
+                </div>
+                <span class="sug-done-label">Done</span>
+                <button class="sug-action" onclick="trimAllSilence()">Trim</button>
+              </div>
+              <div class="sug-card" id="sug-hook">
+                <div class="sug-indicator blue"></div>
+                <div class="sug-content">
+                  <div class="sug-title">Weak opening hook</div>
+                  <div class="sug-desc">Start at 00:14 for stronger open</div>
+                </div>
+                <span class="sug-done-label">Done</span>
+                <button class="sug-action" onclick="applyHookFix()">Preview</button>
+              </div>
+              <div class="sug-card" onclick="openPanel('clips-panel')">
+                <div class="sug-indicator green"></div>
+                <div class="sug-content">
+                  <div class="sug-title">7 social clips detected</div>
+                  <div class="sug-desc">Auto-clipped with virality scores</div>
+                </div>
+                <button class="sug-action" onclick="openPanel('clips-panel')">View</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section" id="audio-section">
+          <div class="section-header" onclick="toggleSection('audio-section')">
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span class="section-title">Audio</span>
+            <div class="spacer"></div>
+            <span class="section-badge green" id="audio-badge">Good</span>
+            <svg class="section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="section-body">
+            <div class="suggestion-list">
+              <div class="sug-card" id="sug-studio">
+                <div class="sug-indicator blue"></div>
+                <div class="sug-content">
+                  <div class="sug-title">Studio Sound</div>
+                  <div class="sug-desc">Enhance voice clarity and reduce noise</div>
+                </div>
+                <span class="sug-done-label">Applied</span>
+                <button class="sug-action" onclick="applyStudioSound()">Apply</button>
+              </div>
+              <div class="sug-card" id="sug-normalize">
+                <div class="sug-indicator blue"></div>
+                <div class="sug-content">
+                  <div class="sug-title">Normalize loudness</div>
+                  <div class="sug-desc">Target -14 LUFS for YouTube</div>
+                </div>
+                <span class="sug-done-label">Applied</span>
+                <button class="sug-action" onclick="applyNormalize()">Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CAPTIONS OVERLAY PANEL ═══ -->
+      <div class="overlay-panel" id="captions-panel">
+        <div class="overlay-header">
+          <h3>Captions</h3>
+          <div class="spacer"></div>
+          <button class="overlay-close" onclick="closePanel('captions-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="overlay-body">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:10px;">Caption Style</div>
+          <div class="caption-style-grid">
+            <div class="caption-style-card selected" onclick="selectCaptionStyle(this)"><div class="demo-text" style="color:var(--text-primary);text-shadow:0 1px 2px rgba(0,0,0,0.1);">Bold</div><div class="style-name">Bold</div></div>
+            <div class="caption-style-card" onclick="selectCaptionStyle(this)"><div class="demo-text"><span style="background:var(--accent);color:white;padding:1px 4px;border-radius:3px;">High</span>light</div><div class="style-name">Highlight</div></div>
+            <div class="caption-style-card" onclick="selectCaptionStyle(this)"><div class="demo-text" style="color:transparent;-webkit-text-stroke:1.5px var(--text-primary);">Outline</div><div class="style-name">Outline</div></div>
+            <div class="caption-style-card" onclick="selectCaptionStyle(this)"><div class="demo-text"><span style="background:rgba(0,0,0,0.7);color:white;padding:2px 6px;border-radius:4px;">Box</span></div><div class="style-name">Box</div></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin:16px 0 10px;">Options</div>
+          <div class="option-row"><span class="option-label">Burn into video</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="option-row"><span class="option-label">Word-by-word highlight</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="option-row"><span class="option-label">Emoji detection</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+          <div class="option-row"><span class="option-label">Position</span><span class="option-value">Bottom center</span></div>
+          <div class="option-row"><span class="option-label">Font size</span><span class="option-value">32px</span></div>
+          <div class="option-row"><span class="option-label">Max words per line</span><span class="option-value">4</span></div>
+          <button class="export-go" onclick="toast('Captions generated'); closePanel('captions-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Generate Captions</button>
+        </div>
+      </div>
+
+      <!-- ═══ CLIPS OVERLAY PANEL ═══ -->
+      <div class="overlay-panel" id="clips-panel">
+        <div class="overlay-header">
+          <h3>Auto Clips</h3>
+          <span style="font-size:10px;color:var(--accent);font-weight:600;margin-left:6px;">7 clips</span>
+          <div class="spacer"></div>
+          <button class="overlay-close" onclick="closePanel('clips-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="overlay-body">
+          <div class="clip-card"><div class="clip-thumb">16:9<span class="dur">0:42</span></div><div class="clip-info"><div class="clip-title">"The key innovation here is the teleprompter"</div><div class="clip-meta"><span class="virality high">92 viral</span> &middot; 00:34</div></div></div>
+          <div class="clip-card"><div class="clip-thumb">9:16<span class="dur">0:38</span></div><div class="clip-info"><div class="clip-title">"Think of it like having a multi-camera setup from your laptop"</div><div class="clip-meta"><span class="virality high">87 viral</span> &middot; 00:22</div></div></div>
+          <div class="clip-card"><div class="clip-thumb">16:9<span class="dur">0:55</span></div><div class="clip-info"><div class="clip-title">"Let me show you how the layout system works"</div><div class="clip-meta"><span class="virality med">74 viral</span> &middot; 01:12</div></div></div>
+          <div class="clip-card"><div class="clip-thumb">9:16<span class="dur">0:28</span></div><div class="clip-info"><div class="clip-title">"You hit record and all active sources start capturing"</div><div class="clip-meta"><span class="virality med">71 viral</span> &middot; 03:45</div></div></div>
+          <div class="clip-card"><div class="clip-thumb">16:9<span class="dur">1:12</span></div><div class="clip-info"><div class="clip-title">"The audio driver handles mic and system audio separately"</div><div class="clip-meta"><span class="virality med">65 viral</span> &middot; 04:20</div></div></div>
+          <div class="clip-card"><div class="clip-thumb">1:1<span class="dur">0:45</span></div><div class="clip-info"><div class="clip-title">"Each video source can be toggled independently"</div><div class="clip-meta"><span class="virality med">61 viral</span> &middot; 01:58</div></div></div>
+          <div class="clip-card"><div class="clip-thumb">16:9<span class="dur">0:22</span></div><div class="clip-info"><div class="clip-title">"Everything gets saved as separate files"</div><div class="clip-meta"><span class="virality">48 viral</span> &middot; 05:40</div></div></div>
+          <button class="export-go" onclick="toast('Exporting all 7 clips...'); closePanel('clips-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export All Clips</button>
+        </div>
+      </div>
+
+      <!-- ═══ EXPORT OVERLAY PANEL ═══ -->
+      <div class="overlay-panel" id="export-panel">
+        <div class="overlay-header">
+          <h3>Export</h3>
+          <div class="spacer"></div>
+          <button class="overlay-close" onclick="closePanel('export-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="overlay-body">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:10px;">Format</div>
+          <div class="export-format">
+            <button class="fmt-chip selected" onclick="selectFmt(this)">16:9</button>
+            <button class="fmt-chip" onclick="selectFmt(this)">9:16</button>
+            <button class="fmt-chip" onclick="selectFmt(this)">1:1</button>
+            <button class="fmt-chip" onclick="selectFmt(this)">4:5</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin:16px 0 10px;">Settings</div>
+          <div class="option-row"><span class="option-label">Resolution</span><span class="option-value">1080p</span></div>
+          <div class="option-row"><span class="option-label">Quality</span><span class="option-value">High (H.264)</span></div>
+          <div class="option-row"><span class="option-label">Include captions</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="option-row"><span class="option-label">Studio sound</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="option-row"><span class="option-label">Auto-reframe (face track)</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="option-row"><span class="option-label">Normalize audio</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <button class="export-go" onclick="toast('Exporting video...'); closePanel('export-panel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export Video</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TRACK PANEL ═══ -->
+    <div class="track-panel" id="track-panel" style="height: 220px;">
+      <div class="resize-handle resize-handle-top" id="resize-track"></div>
+
+      <!-- Transport bar -->
+      <div class="track-panel-bar">
+        <button class="tp-toggle" onclick="toggleTrackPanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 15 12 9 18 15"/></svg></button>
+        <span class="tp-title">Tracks</span>
+        <span style="font-size:10px;color:var(--text-dim);">4 tracks</span>
+        <div class="tp-spacer"></div>
+        <div class="tp-transport">
+          <button class="tp-btn" onclick="toast('Skip back')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg></button>
+          <button class="tp-play" id="play-btn" onclick="togglePlay()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+          <button class="tp-btn" onclick="toast('Skip forward')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg></button>
+        </div>
+        <span class="tp-time" id="tp-time">04:23 / 12:47</span>
+        <div class="tp-spacer"></div>
+        <div class="tp-zoom">
+          <button class="tp-zoom-btn" onclick="zoomTimeline(-1)">-</button>
+          <button class="tp-zoom-btn" onclick="zoomTimeline(1)">+</button>
+        </div>
+      </div>
+
+      <div class="track-body">
+        <!-- Ruler -->
+        <div class="track-ruler" id="track-ruler">
+          <span class="ruler-mark" style="left: 140px;">00:00</span>
+          <span class="ruler-mark" style="left: 240px;">01:00</span>
+          <span class="ruler-mark" style="left: 340px;">02:00</span>
+          <span class="ruler-mark" style="left: 440px;">03:00</span>
+          <span class="ruler-mark" style="left: 540px;">04:00</span>
+          <span class="ruler-mark" style="left: 640px;">05:00</span>
+          <span class="ruler-mark" style="left: 740px;">06:00</span>
+          <span class="ruler-mark" style="left: 840px;">07:00</span>
+          <span class="ruler-mark" style="left: 940px;">08:00</span>
+          <span class="ruler-mark" style="left: 1040px;">09:00</span>
+          <span class="ruler-mark" style="left: 1140px;">10:00</span>
+          <span class="ruler-mark" style="left: 1240px;">11:00</span>
+          <span class="ruler-mark" style="left: 1340px;">12:00</span>
+          <div class="ruler-playhead" id="ruler-playhead"></div>
+        </div>
+
+        <!-- Track rows -->
+        <div class="track-rows">
+
+          <!-- Video Main -->
+          <div class="track-row selected" id="track-video" onclick="selectTrack(this)">
+            <div class="track-meta">
+              <div class="track-color" style="background: var(--accent);"></div>
+              <svg class="track-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <span class="track-name">Screen</span>
+              <div class="track-controls">
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleMute(this, 'track-video')" title="Mute">M</button>
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleSolo(this)" title="Solo">S</button>
+              </div>
+            </div>
+            <div class="track-content">
+              <div class="track-clip video-clip" style="left: 0; right: 3%;">
+                <span class="clip-label">screen-recording.mp4</span>
+              </div>
+              <div class="track-cut" style="left: 52%; width: 3%;"></div>
+              <div class="track-cut" style="left: 78%; width: 2%;"></div>
+              <div class="track-playhead"></div>
+            </div>
+          </div>
+
+          <!-- Camera PiP -->
+          <div class="track-row" id="track-camera" onclick="selectTrack(this)">
+            <div class="track-meta">
+              <div class="track-color" style="background: #785adc;"></div>
+              <svg class="track-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              <span class="track-name">Camera</span>
+              <div class="track-controls">
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleMute(this, 'track-camera')" title="Mute">M</button>
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleSolo(this)" title="Solo">S</button>
+              </div>
+            </div>
+            <div class="track-content">
+              <div class="track-clip camera-clip" style="left: 0; right: 3%;">
+                <span class="clip-label">webcam.mp4</span>
+              </div>
+              <div class="track-cut" style="left: 52%; width: 3%;"></div>
+              <div class="track-playhead"></div>
+            </div>
+          </div>
+
+          <!-- Microphone -->
+          <div class="track-row" id="track-mic" onclick="selectTrack(this)">
+            <div class="track-meta">
+              <div class="track-color" style="background: var(--green);"></div>
+              <svg class="track-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+              <span class="track-name">Microphone</span>
+              <div class="track-controls">
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleMute(this, 'track-mic')" title="Mute">M</button>
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleSolo(this)" title="Solo">S</button>
+                <input type="range" class="vol-slider" min="0" max="100" value="85" onclick="event.stopPropagation()" oninput="toast('Mic volume: ' + this.value + '%')">
+              </div>
+            </div>
+            <div class="track-content">
+              <div class="track-clip mic-clip" style="left: 0; right: 3%;">
+                <div class="wave-bars" id="mic-wave"></div>
+              </div>
+              <div class="track-cut" style="left: 12%; width: 1.5%;"></div>
+              <div class="track-cut" style="left: 28%; width: 1%;"></div>
+              <div class="track-cut" style="left: 52%; width: 3%;"></div>
+              <div class="track-cut" style="left: 68%; width: 2%;"></div>
+              <div class="track-cut" style="left: 78%; width: 2%;"></div>
+              <div class="track-playhead"></div>
+            </div>
+          </div>
+
+          <!-- System Audio -->
+          <div class="track-row" id="track-sys" onclick="selectTrack(this)">
+            <div class="track-meta">
+              <div class="track-color" style="background: var(--yellow);"></div>
+              <svg class="track-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              <span class="track-name">System Audio</span>
+              <div class="track-controls">
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleMute(this, 'track-sys')" title="Mute">M</button>
+                <button class="trk-btn" onclick="event.stopPropagation(); toggleSolo(this)" title="Solo">S</button>
+                <input type="range" class="vol-slider" min="0" max="100" value="60" onclick="event.stopPropagation()" oninput="toast('System audio volume: ' + this.value + '%')">
+              </div>
+            </div>
+            <div class="track-content">
+              <div class="track-clip sys-clip" style="left: 0; right: 3%;">
+                <div class="wave-bars" id="sys-wave"></div>
+              </div>
+              <div class="track-playhead"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+<script>
+  // ═══ Toast ═══
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+  }
+
+  // ═══ Filler word removal ═══
+  function removeFiller(el) {
+    el.classList.remove('filler');
+    el.classList.add('filler-removed');
+    el.onclick = null;
+    updateCounts();
+    toast('Filler removed: "' + el.textContent + '"');
+  }
+
+  function removeAllFillers() {
+    document.querySelectorAll('.w.filler').forEach(el => {
+      el.classList.remove('filler');
+      el.classList.add('filler-removed');
+      el.onclick = null;
+    });
+    document.getElementById('sug-fillers').classList.add('done');
+    updateCounts();
+    toast('All 23 filler words removed');
+  }
+
+  // ═══ Silence trimming ═══
+  function trimSilence(el) {
+    el.classList.add('trimmed');
+    el.onclick = null;
+    updateCounts();
+    toast('Pause trimmed: ' + el.textContent);
+  }
+
+  function trimAllSilence() {
+    document.querySelectorAll('.silence:not(.trimmed)').forEach(el => {
+      el.classList.add('trimmed');
+      el.onclick = null;
+    });
+    document.getElementById('sug-pauses').classList.add('done');
+    updateCounts();
+    toast('All pauses trimmed — saved 18.4s');
+  }
+
+  // ═══ Update counts ═══
+  function updateCounts() {
+    const fillers = document.querySelectorAll('.w.filler').length;
+    const pauses = document.querySelectorAll('.silence:not(.trimmed)').length;
+    document.getElementById('filler-count').textContent = fillers;
+    document.getElementById('pause-count').textContent = pauses;
+
+    const summary = document.getElementById('cleanup-summary');
+    const btn = document.getElementById('clean-all-btn');
+    const badge = document.getElementById('filler-badge');
+
+    if (fillers === 0 && pauses === 0) {
+      summary.classList.add('clean');
+      btn.textContent = 'Clean';
+      btn.classList.add('done');
+      badge.classList.add('hidden');
+    }
+  }
+
+  // ═══ Clean All ═══
+  function cleanAll() {
+    removeAllFillers();
+    trimAllSilence();
+    toast('All fillers removed + all pauses trimmed');
+  }
+
+  // ═══ Toolbar toggles ═══
+  function toggleFillers(btn) {
+    btn.classList.toggle('active');
+    const show = btn.classList.contains('active');
+    document.querySelectorAll('.w.filler, .w.filler-removed').forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  function togglePauses(btn) {
+    btn.classList.toggle('active');
+    const show = btn.classList.contains('active');
+    document.querySelectorAll('.silence').forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+    if (show) toast('Pauses visible');
+  }
+
+  function toggleScenes(btn) {
+    btn.classList.toggle('active');
+    const show = btn.classList.contains('active');
+    document.querySelectorAll('.scene-divider').forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  // ═══ Overlay panels ═══
+  function openPanel(id) {
+    document.getElementById(id).classList.add('open');
+  }
+
+  function closePanel(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+
+  // ═══ Section collapse ═══
+  function toggleSection(id) {
+    document.getElementById(id).classList.toggle('collapsed');
+  }
+
+  // ═══ Caption style selection ═══
+  function selectCaptionStyle(el) {
+    document.querySelectorAll('.caption-style-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    toast('Caption style: ' + el.querySelector('.style-name').textContent);
+  }
+
+  // ═══ Export format selection ═══
+  function selectFmt(el) {
+    document.querySelectorAll('.fmt-chip').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  // ═══ Audio enhancements ═══
+  function applyStudioSound() {
+    document.getElementById('sug-studio').classList.add('done');
+    toast('Studio Sound applied — voice enhanced');
+  }
+
+  function applyNormalize() {
+    document.getElementById('sug-normalize').classList.add('done');
+    toast('Audio normalized to -14 LUFS');
+  }
+
+  // ═══ Hook fix ═══
+  function applyHookFix() {
+    // Strikethrough the weak opening
+    const played = document.querySelectorAll('.w.played');
+    played.forEach(el => { el.classList.remove('played'); el.classList.add('cut'); });
+    document.getElementById('sug-hook').classList.add('done');
+    toast('Opening trimmed — now starts at "The capture studio..."');
+  }
+
+  // ═══ Word click — seek ═══
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('w') && !e.target.classList.contains('filler') && !e.target.classList.contains('cut')) {
+      document.querySelectorAll('.w.current').forEach(w => w.classList.remove('current'));
+      e.target.classList.add('current');
+    }
+  });
+
+  // ═���═ Track Panel ��══
+  function toggleTrackPanel() {
+    document.getElementById('track-panel').classList.toggle('collapsed');
+  }
+
+  function selectTrack(row) {
+    document.querySelectorAll('.track-row').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+  }
+
+  function toggleMute(btn, trackId) {
+    btn.classList.toggle('active-mute');
+    const track = document.getElementById(trackId);
+    track.classList.toggle('muted');
+    const name = track.querySelector('.track-name').textContent;
+    toast(btn.classList.contains('active-mute') ? name + ' muted' : name + ' unmuted');
+  }
+
+  function toggleSolo(btn) {
+    btn.classList.toggle('active-solo');
+    if (btn.classList.contains('active-solo')) {
+      // Mute all other tracks
+      document.querySelectorAll('.track-row').forEach(row => {
+        if (!row.contains(btn)) row.classList.add('muted');
+        else row.classList.remove('muted');
+      });
+      toast('Solo: ' + btn.closest('.track-row').querySelector('.track-name').textContent);
+    } else {
+      // Unsolo — unmute all
+      document.querySelectorAll('.track-row').forEach(row => row.classList.remove('muted'));
+      document.querySelectorAll('.trk-btn.active-mute').forEach(b => {
+        const tr = b.closest('.track-row');
+        tr.classList.add('muted');
+      });
+      toast('Solo off');
+    }
+  }
+
+  let isPlaying = false;
+  let playInterval;
+  let playPosition = 35; // percentage
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const btn = document.getElementById('play-btn');
+    if (isPlaying) {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+      playInterval = setInterval(() => {
+        playPosition += 0.15;
+        if (playPosition > 97) { playPosition = 0; }
+        updatePlayhead();
+        updateTimeDisplay();
+      }, 50);
+    } else {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+      clearInterval(playInterval);
+    }
+  }
+
+  function updatePlayhead() {
+    document.getElementById('ruler-playhead').style.left = (140 + (playPosition / 100) * 1200) + 'px';
+    document.querySelectorAll('.track-playhead').forEach(ph => ph.style.left = playPosition + '%');
+    document.getElementById('scrub-fill').style.width = playPosition + '%';
+  }
+
+  function updateTimeDisplay() {
+    const totalSec = 767; // 12:47
+    const currentSec = Math.floor((playPosition / 100) * totalSec);
+    const min = Math.floor(currentSec / 60);
+    const sec = currentSec % 60;
+    const timeStr = min + ':' + String(sec).padStart(2, '0');
+    document.getElementById('tp-time').textContent = timeStr + ' / 12:47';
+    document.getElementById('time-label').textContent = timeStr + ' / 12:47';
+  }
+
+  // Click ruler to seek
+  document.getElementById('track-ruler').addEventListener('click', function(e) {
+    const rect = this.getBoundingClientRect();
+    const x = e.clientX - rect.left - 140;
+    const pct = Math.max(0, Math.min(100, (x / (rect.width - 140)) * 100));
+    playPosition = pct;
+    updatePlayhead();
+    updateTimeDisplay();
+  });
+
+  function zoomTimeline(dir) {
+    toast(dir > 0 ? 'Zoom in' : 'Zoom out');
+  }
+
+  // Generate waveform bars
+  function generateWave(containerId, color, count) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    let html = '';
+    for (let i = 0; i < count; i++) {
+      const h = 15 + Math.random() * 70;
+      html += '<div class="wb" style="height:' + h + '%;background:' + color + ';opacity:0.4;"></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  generateWave('mic-wave', 'var(--green)', 200);
+  generateWave('sys-wave', 'var(--yellow)', 200);
+
+  // ═══ Resize: Right Panel (horizontal) ═══
+  (function() {
+    const handle = document.getElementById('resize-right');
+    const panel = document.getElementById('right-panel');
+    const app = document.querySelector('.app');
+    let dragging = false;
+    let startX, startW;
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = panel.offsetWidth;
+      handle.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      const delta = startX - e.clientX;
+      const newW = Math.max(260, Math.min(700, startW + delta));
+      app.style.gridTemplateColumns = '1fr ' + newW + 'px';
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  })();
+
+  // ═══ Resize: Track Panel (vertical) ═══
+  (function() {
+    const handle = document.getElementById('resize-track');
+    const panel = document.getElementById('track-panel');
+    let dragging = false;
+    let startY, startH;
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (panel.classList.contains('collapsed')) return;
+      dragging = true;
+      startY = e.clientY;
+      startH = panel.offsetHeight;
+      handle.classList.add('active');
+      panel.classList.add('resizing');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const delta = startY - e.clientY;
+      const newH = Math.max(120, Math.min(500, startH + delta));
+      panel.style.height = newH + 'px';
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('active');
+      panel.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  })();
+</script>
+</body>
+</html>
