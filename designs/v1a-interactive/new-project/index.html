@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulla — New Project</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page: #f6f8fa; --bg-surface: #ffffff; --bg-elevated: #f0f2f5; --bg-hover: #e8ebef;
+    --text-primary: #1f2328; --text-secondary: #59636e; --text-muted: #8b949e; --text-dim: #b1bac4;
+    --accent: #3a7f9e; --accent-soft: rgba(58,127,158,0.08); --accent-hover: #2d6a85;
+    --green: #1a7f37; --green-soft: rgba(26,127,55,0.06);
+    --red: #cf222e; --red-soft: rgba(207,34,46,0.06);
+    --border: #e8ebef; --border-visible: #d1d9e0;
+    --sans: 'Inter', -apple-system, sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+
+  body { background: var(--bg-page); color: var(--text-primary); font-family: var(--sans); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Nav */
+  .nav { display: flex; align-items: center; padding: 0 32px; height: 56px; background: var(--bg-surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .nav-logo { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--accent); text-decoration: none; }
+  .nav .spacer { flex: 1; }
+  .nav-link { font-size: 13px; color: var(--text-muted); text-decoration: none; padding: 6px 14px; border-radius: 6px; transition: all 0.12s; cursor: pointer; }
+  .nav-link:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .nav-link.active { color: var(--accent); background: var(--accent-soft); }
+  .nav-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #7c3aed); border: none; color: white; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 12px; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; padding: 48px 32px; }
+  .container { max-width: 640px; margin: 0 auto; }
+
+  .page-title { font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .page-desc { font-size: 14px; color: var(--text-muted); margin-bottom: 32px; }
+
+  /* Drop zone */
+  .drop-zone { padding: 48px 40px; border: 2px dashed var(--border-visible); border-radius: 16px; background: var(--bg-surface); text-align: center; transition: all 0.2s; cursor: pointer; margin-bottom: 32px; }
+  .drop-zone:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .drop-zone.drag-over { border-color: var(--accent); background: var(--accent-soft); border-style: solid; transform: scale(1.01); }
+  .drop-zone.has-file { border-style: solid; border-color: var(--green); background: var(--green-soft); }
+
+  .drop-icon { width: 56px; height: 56px; margin: 0 auto 16px; background: var(--accent-soft); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+  .drop-zone.has-file .drop-icon { background: var(--green-soft); color: var(--green); }
+  .drop-icon svg { width: 28px; height: 28px; }
+
+  .drop-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+  .drop-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5; }
+  .drop-btn { padding: 10px 24px; background: var(--accent); border: none; border-radius: 8px; color: white; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.12s; }
+  .drop-btn:hover { background: var(--accent-hover); }
+  .drop-btn svg { width: 16px; height: 16px; }
+  .drop-formats { margin-top: 16px; font-size: 11px; color: var(--text-dim); }
+
+  /* File info (shown after file selected) */
+  .file-info { display: none; align-items: center; gap: 14px; text-align: left; }
+  .drop-zone.has-file .file-info { display: flex; }
+  .drop-zone.has-file .drop-empty { display: none; }
+  .file-icon { width: 48px; height: 48px; background: var(--green-soft); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--green); flex-shrink: 0; }
+  .file-icon svg { width: 24px; height: 24px; }
+  .file-details { flex: 1; }
+  .file-name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .file-meta { font-size: 11px; color: var(--text-muted); }
+  .file-remove { width: 28px; height: 28px; background: none; border: 1px solid var(--border-visible); border-radius: 6px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
+  .file-remove:hover { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+  .file-remove svg { width: 14px; height: 14px; }
+
+  /* Form sections */
+  .form-section { margin-bottom: 24px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+  .form-input { width: 100%; padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-visible); border-radius: 8px; color: var(--text-primary); font-family: var(--sans); font-size: 13px; transition: border-color 0.12s; }
+  .form-input:focus { outline: none; border-color: var(--accent); }
+
+  /* Rule template picker */
+  .rule-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .rule-card { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--bg-surface); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.12s; }
+  .rule-card:hover { border-color: var(--border-visible); }
+  .rule-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .rule-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+  .rule-icon.podcast { background: rgba(80,150,179,0.1); }
+  .rule-icon.youtube { background: rgba(229,83,75,0.08); }
+  .rule-icon.social { background: rgba(26,127,55,0.06); }
+  .rule-icon.tutorial { background: rgba(124,58,237,0.08); }
+  .rule-icon.interview { background: rgba(154,103,0,0.06); }
+  .rule-icon.custom { background: var(--bg-elevated); color: var(--text-dim); font-size: 18px; }
+  .rule-info { flex: 1; }
+  .rule-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .rule-desc { font-size: 10px; color: var(--text-muted); }
+  .rule-check { width: 18px; height: 18px; border: 1.5px solid var(--border-visible); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.12s; }
+  .rule-card.selected .rule-check { background: var(--accent); border-color: var(--accent); color: white; }
+  .rule-check svg { width: 10px; height: 10px; display: none; }
+  .rule-card.selected .rule-check svg { display: block; }
+
+  /* Options */
+  .option-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .option-label { font-size: 12px; color: var(--text-secondary); }
+  .option-desc { font-size: 10px; color: var(--text-dim); }
+  .toggle { width: 36px; height: 20px; background: var(--bg-hover); border: 1px solid var(--border-visible); border-radius: 10px; position: relative; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+  .toggle.on { background: var(--accent-soft); border-color: var(--accent); }
+  .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); top: 2px; left: 2px; transition: all 0.2s; }
+  .toggle.on::after { left: 18px; background: var(--accent); }
+
+  /* Create button */
+  .create-bar { padding: 16px 0; display: flex; gap: 10px; }
+  .create-btn { flex: 1; padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: white; font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.12s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .create-btn:hover { background: var(--accent-hover); }
+  .create-btn:disabled { opacity: 0.4; cursor: default; }
+  .create-btn svg { width: 18px; height: 18px; }
+  .cancel-btn { padding: 14px 24px; background: none; border: 1px solid var(--border-visible); border-radius: 10px; color: var(--text-secondary); font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.12s; text-decoration: none; text-align: center; }
+  .cancel-btn:hover { border-color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a class="nav-logo" href="../welcome/index.html">sulla</a>
+    <div class="spacer"></div>
+    <a class="nav-link" href="../welcome/index.html">Home</a>
+    <a class="nav-link active">New Project</a>
+    <a class="nav-link" href="../templates/index.html">Templates</a>
+    <button class="nav-avatar">J</button>
+  </nav>
+
+  <div class="main">
+    <div class="container">
+
+      <div class="page-title">New Project</div>
+      <div class="page-desc">Import your media and choose how Sulla should edit it.</div>
+
+      <!-- Drop zone -->
+      <div class="drop-zone" id="drop-zone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault(); this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="event.preventDefault(); this.classList.remove('drag-over'); selectFile()">
+        <div class="drop-empty">
+          <div class="drop-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+          <div class="drop-title">Drop video or audio files here</div>
+          <div class="drop-desc">or click to browse</div>
+          <button class="drop-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            Choose Files
+          </button>
+          <div class="drop-formats">MP4, MOV, WebM, WAV, MP3, M4A</div>
+        </div>
+        <div class="file-info">
+          <div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
+          <div class="file-details">
+            <div class="file-name" id="file-name">product-demo-april.mp4</div>
+            <div class="file-meta" id="file-meta">12:47 &middot; 1920x1080 &middot; 1.2 GB</div>
+          </div>
+          <button class="file-remove" onclick="event.stopPropagation(); removeFile()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept="video/*,audio/*" style="display:none" onchange="selectFile()">
+
+      <!-- Project name -->
+      <div class="form-section">
+        <div class="form-label">Project Name</div>
+        <input class="form-input" id="project-name" value="product-demo-april" placeholder="My Project">
+      </div>
+
+      <!-- Rule template -->
+      <div class="form-section">
+        <div class="form-label">Editing Rules</div>
+        <div class="rule-grid">
+          <div class="rule-card selected" onclick="selectRule(this)">
+            <div class="rule-icon podcast">🎙️</div>
+            <div class="rule-info"><div class="rule-name">Podcast</div><div class="rule-desc">Clean fillers, normalize, add intro/outro</div></div>
+            <div class="rule-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+          <div class="rule-card" onclick="selectRule(this)">
+            <div class="rule-icon youtube">🎬</div>
+            <div class="rule-info"><div class="rule-name">YouTube</div><div class="rule-desc">Hook optimization, B-roll, captions, end card</div></div>
+            <div class="rule-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+          <div class="rule-card" onclick="selectRule(this)">
+            <div class="rule-icon social">📱</div>
+            <div class="rule-info"><div class="rule-name">Social Clips</div><div class="rule-desc">Extract highlights, reformat, add captions</div></div>
+            <div class="rule-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+          <div class="rule-card" onclick="selectRule(this)">
+            <div class="rule-icon tutorial">📚</div>
+            <div class="rule-info"><div class="rule-name">Tutorial</div><div class="rule-desc">Section headers, code callouts, pacing</div></div>
+            <div class="rule-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+          <div class="rule-card" onclick="selectRule(this)">
+            <div class="rule-icon interview">🎤</div>
+            <div class="rule-info"><div class="rule-name">Interview</div><div class="rule-desc">Speaker labels, split-screen, Q&A segments</div></div>
+            <div class="rule-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+          <div class="rule-card" onclick="selectRule(this)">
+            <div class="rule-icon custom">+</div>
+            <div class="rule-info"><div class="rule-name">Custom</div><div class="rule-desc">Start with no rules, build your own</div></div>
+            <div class="rule-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto options -->
+      <div class="form-section">
+        <div class="form-label">On Import</div>
+        <div class="option-row"><div><div class="option-label">Auto-transcribe</div><div class="option-desc">Generate word-level transcript with Whisper</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="option-row"><div><div class="option-label">Detect fillers &amp; silence</div><div class="option-desc">Find "um", "uh", "like" and long pauses</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="option-row"><div><div class="option-label">Speaker diarization</div><div class="option-desc">Identify and label different speakers</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="option-row"><div><div class="option-label">Auto-generate clips</div><div class="option-desc">Find viral-worthy moments with virality scores</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="option-row"><div><div class="option-label">Studio sound</div><div class="option-desc">Enhance voice clarity and reduce noise</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="create-bar">
+        <a class="cancel-btn" href="../welcome/index.html">Cancel</a>
+        <button class="create-btn" onclick="window.location.href='../editor/index.html'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Create Project &amp; Import
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  function selectFile() {
+    document.getElementById('drop-zone').classList.add('has-file');
+  }
+  function removeFile() {
+    document.getElementById('drop-zone').classList.remove('has-file');
+  }
+  function selectRule(card) {
+    document.querySelectorAll('.rule-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+  }
+</script>
+</body>
+</html>

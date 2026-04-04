@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulla — Welcome</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page: #f6f8fa; --bg-surface: #ffffff; --bg-elevated: #f0f2f5; --bg-hover: #e8ebef;
+    --text-primary: #1f2328; --text-secondary: #59636e; --text-muted: #8b949e; --text-dim: #b1bac4;
+    --accent: #3a7f9e; --accent-soft: rgba(58,127,158,0.08); --accent-hover: #2d6a85;
+    --green: #1a7f37; --green-soft: rgba(26,127,55,0.06);
+    --border: #e8ebef; --border-visible: #d1d9e0;
+    --sans: 'Inter', -apple-system, sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+  .dark { --bg-page: #0d1117; --bg-surface: #161b22; --bg-elevated: #1c2128; --bg-hover: #21262d; --text-primary: #e6edf3; --text-secondary: #9eaab6; --text-muted: #6e7681; --text-dim: #484f58; --accent: #5096b3; --accent-soft: rgba(80,150,179,0.1); --accent-hover: #6ab0cc; --green: #3fb950; --green-soft: rgba(63,185,80,0.08); --border: #21262d; --border-visible: #30363d; }
+
+  body { background: var(--bg-page); color: var(--text-primary); font-family: var(--sans); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Nav */
+  .nav { display: flex; align-items: center; padding: 0 32px; height: 56px; background: var(--bg-surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .nav-logo { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--accent); }
+  .nav .spacer { flex: 1; }
+  .nav-link { font-size: 13px; color: var(--text-muted); text-decoration: none; padding: 6px 14px; border-radius: 6px; transition: all 0.12s; cursor: pointer; }
+  .nav-link:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .nav-link.active { color: var(--accent); background: var(--accent-soft); }
+  .nav-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #7c3aed); border: none; color: white; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 12px; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; padding: 48px 32px; }
+  .main::-webkit-scrollbar { width: 8px; }
+  .main::-webkit-scrollbar-track { background: transparent; }
+  .main::-webkit-scrollbar-thumb { background: var(--border-visible); border-radius: 4px; }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  /* Hero */
+  .hero { margin-bottom: 48px; }
+  .hero-greeting { font-size: 28px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+  .hero-sub { font-size: 15px; color: var(--text-muted); }
+
+  /* Quick actions */
+  .quick-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 48px; }
+  .qa-card { padding: 24px 20px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.15s; text-decoration: none; display: flex; flex-direction: column; gap: 10px; }
+  .qa-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.04); transform: translateY(-1px); }
+  .qa-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .qa-icon svg { width: 20px; height: 20px; }
+  .qa-icon.blue { background: var(--accent-soft); color: var(--accent); }
+  .qa-icon.green { background: var(--green-soft); color: var(--green); }
+  .qa-icon.purple { background: rgba(124,58,237,0.08); color: #7c3aed; }
+  .qa-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .qa-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+  /* Section */
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .section-title .count { font-size: 11px; padding: 1px 7px; background: var(--bg-elevated); border-radius: 10px; color: var(--text-dim); font-weight: 500; }
+
+  /* Projects grid */
+  .projects-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 48px; }
+  .project-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.15s; }
+  .project-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.04); transform: translateY(-1px); }
+  .project-thumb { width: 100%; aspect-ratio: 16/9; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; position: relative; }
+  .project-thumb svg { width: 32px; height: 32px; color: var(--text-dim); opacity: 0.3; }
+  .project-thumb .duration-badge { position: absolute; bottom: 8px; right: 8px; padding: 2px 6px; background: rgba(0,0,0,0.6); border-radius: 4px; font-size: 10px; font-family: var(--mono); color: white; }
+  .project-thumb .status-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--bg-surface); }
+  .status-dot.edited { background: var(--green); }
+  .status-dot.draft { background: var(--accent); }
+  .project-body { padding: 12px 14px; }
+  .project-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .project-meta { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+  .project-meta .tag { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; }
+  .tag.edited { background: var(--green-soft); color: var(--green); }
+  .tag.draft { background: var(--accent-soft); color: var(--accent); }
+  .tag.template { background: rgba(124,58,237,0.08); color: #7c3aed; }
+
+  /* Templates preview */
+  .templates-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .template-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.15s; }
+  .template-card:hover { border-color: var(--accent); }
+  .template-thumb { width: 100%; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .template-thumb.podcast { background: linear-gradient(135deg, #1a1d21, #2a3040); color: #5096b3; }
+  .template-thumb.youtube { background: linear-gradient(135deg, #2d1117, #3d2030); color: #e5534b; }
+  .template-thumb.social { background: linear-gradient(135deg, #0d2117, #1d3020); color: #3fb950; }
+  .template-thumb.tutorial { background: linear-gradient(135deg, #1d1730, #2d2040); color: #b392f0; }
+  .template-name { padding: 8px 10px; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-logo">sulla</div>
+    <div class="spacer"></div>
+    <a class="nav-link active" href="#">Home</a>
+    <a class="nav-link" href="../new-project/index.html">New Project</a>
+    <a class="nav-link" href="../templates/index.html">Templates</a>
+    <button class="nav-avatar">J</button>
+  </nav>
+
+  <div class="main">
+    <div class="container">
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero-greeting">Welcome back, Jonathon</div>
+        <div class="hero-sub">What are you editing today?</div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="quick-actions">
+        <a class="qa-card" href="../new-project/index.html">
+          <div class="qa-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+          <div class="qa-title">New Project</div>
+          <div class="qa-desc">Import video or audio files and start editing with AI-powered tools</div>
+        </a>
+        <a class="qa-card" href="../templates/index.html">
+          <div class="qa-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div>
+          <div class="qa-title">Templates</div>
+          <div class="qa-desc">Create reusable editing templates with scenes, styles, and rule sets</div>
+        </a>
+        <a class="qa-card" href="../editor/index.html">
+          <div class="qa-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <div class="qa-title">Quick Edit</div>
+          <div class="qa-desc">Drop a file and let Sulla auto-clean fillers, silence, and generate clips</div>
+        </a>
+      </div>
+
+      <!-- Recent projects -->
+      <div class="section-title">Recent Projects <span class="count">6</span></div>
+      <div class="projects-grid">
+        <a class="project-card" href="../editor/index.html">
+          <div class="project-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span class="duration-badge">12:47</span>
+            <div class="status-dot draft"></div>
+          </div>
+          <div class="project-body">
+            <div class="project-name">product-demo-april</div>
+            <div class="project-meta"><span class="tag draft">Draft</span> 2 hours ago</div>
+          </div>
+        </a>
+        <a class="project-card" href="../editor/index.html">
+          <div class="project-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span class="duration-badge">45:12</span>
+            <div class="status-dot edited"></div>
+          </div>
+          <div class="project-body">
+            <div class="project-name">podcast-ep42</div>
+            <div class="project-meta"><span class="tag edited">Edited</span> Yesterday</div>
+          </div>
+        </a>
+        <a class="project-card" href="../editor/index.html">
+          <div class="project-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span class="duration-badge">8:34</span>
+            <div class="status-dot edited"></div>
+          </div>
+          <div class="project-body">
+            <div class="project-name">investor-pitch-v3</div>
+            <div class="project-meta"><span class="tag edited">Edited</span> 3 days ago</div>
+          </div>
+        </a>
+        <a class="project-card" href="../editor/index.html">
+          <div class="project-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span class="duration-badge">3:22</span>
+            <div class="status-dot edited"></div>
+          </div>
+          <div class="project-body">
+            <div class="project-name">sulla-desktop-trailer</div>
+            <div class="project-meta"><span class="tag edited">Edited</span> Last week &middot; <span class="tag template">Template</span></div>
+          </div>
+        </a>
+        <a class="project-card" href="../editor/index.html">
+          <div class="project-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span class="duration-badge">22:15</span>
+            <div class="status-dot draft"></div>
+          </div>
+          <div class="project-body">
+            <div class="project-name">team-standup-march28</div>
+            <div class="project-meta"><span class="tag draft">Draft</span> Last week</div>
+          </div>
+        </a>
+        <a class="project-card" href="../editor/index.html">
+          <div class="project-thumb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            <span class="duration-badge">1:02:41</span>
+            <div class="status-dot edited"></div>
+          </div>
+          <div class="project-body">
+            <div class="project-name">podcast-ep41</div>
+            <div class="project-meta"><span class="tag edited">Edited</span> 2 weeks ago</div>
+          </div>
+        </a>
+      </div>
+
+      <!-- Templates preview -->
+      <div class="section-title">Templates <span class="count">4</span></div>
+      <div class="templates-row">
+        <a class="template-card" href="../templates/index.html">
+          <div class="template-thumb podcast">Podcast</div>
+          <div class="template-name">Podcast Episode</div>
+        </a>
+        <a class="template-card" href="../templates/index.html">
+          <div class="template-thumb youtube">YouTube</div>
+          <div class="template-name">YouTube Video</div>
+        </a>
+        <a class="template-card" href="../templates/index.html">
+          <div class="template-thumb social">Social</div>
+          <div class="template-name">Social Clips</div>
+        </a>
+        <a class="template-card" href="../templates/index.html">
+          <div class="template-thumb tutorial">Tutorial</div>
+          <div class="template-name">Tutorial / Course</div>
+        </a>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

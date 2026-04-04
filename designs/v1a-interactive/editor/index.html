@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sulla Video Editor — Interactive Prototype</title>
+<title>Sulla — Editor</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -417,7 +417,7 @@
 
     <!-- ═══ TOP BAR ═══ -->
     <div class="top-bar">
-      <div class="logo">sulla</div>
+      <a class="logo" href="../welcome/index.html" style="text-decoration:none;">sulla</a>
       <div class="breadcrumb"><span>/</span> <strong>product-demo-april</strong></div>
       <div class="spacer"></div>
       <div class="cleanup-summary" id="cleanup-summary">
@@ -903,70 +903,12 @@
     </div>
   </div>
 
-  <!-- ═══ EMPTY STATE ═══ -->
-  <div class="empty-state" id="empty-state">
-    <div class="empty-logo">sulla</div>
-    <div class="empty-subtitle">AI-powered video editor</div>
-
-    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
-         ondragover="event.preventDefault(); this.classList.add('drag-over')"
-         ondragleave="this.classList.remove('drag-over')"
-         ondrop="event.preventDefault(); this.classList.remove('drag-over'); simulateImport()">
-      <div class="drop-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      </div>
-      <div class="drop-title">Drop video or audio files here</div>
-      <div class="drop-desc">or click to browse your files</div>
-      <button class="drop-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-        Choose Files
-      </button>
-      <div class="drop-formats">MP4, MOV, WebM, WAV, MP3, M4A</div>
-    </div>
-    <input type="file" id="file-input" accept="video/*,audio/*" style="display:none" onchange="simulateImport()">
-
-    <div class="drop-or">
-      <div class="drop-or-line"></div>
-      <span class="drop-or-text">or open recent</span>
-      <div class="drop-or-line"></div>
-    </div>
-
-    <div class="recent-projects">
-      <div class="recent-list">
-        <div class="recent-item" onclick="simulateImport()">
-          <div class="recent-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
-          <div class="recent-info">
-            <div class="recent-name">product-demo-april.mp4</div>
-            <div class="recent-meta">12:47 &middot; 1080p &middot; 1.2 GB</div>
-          </div>
-          <span class="recent-time">2 hours ago</span>
-        </div>
-        <div class="recent-item" onclick="simulateImport()">
-          <div class="recent-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div>
-          <div class="recent-info">
-            <div class="recent-name">podcast-ep42-raw.wav</div>
-            <div class="recent-meta">45:12 &middot; 48kHz stereo &middot; 890 MB</div>
-          </div>
-          <span class="recent-time">Yesterday</span>
-        </div>
-        <div class="recent-item" onclick="simulateImport()">
-          <div class="recent-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
-          <div class="recent-info">
-            <div class="recent-name">investor-pitch-v3.mov</div>
-            <div class="recent-meta">8:34 &middot; 4K &middot; 3.1 GB</div>
-          </div>
-          <span class="recent-time">3 days ago</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- ═══ PROGRESS OVERLAY ═══ -->
   <div class="progress-overlay" id="progress-overlay">
     <div class="progress-card">
       <div class="progress-spinner"></div>
-      <div class="progress-title" id="progress-title">Importing video...</div>
-      <div class="progress-desc" id="progress-desc">Extracting audio and generating transcript</div>
+      <div class="progress-title" id="progress-title">Processing...</div>
+      <div class="progress-desc" id="progress-desc">Please wait</div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
       <div class="progress-pct" id="progress-pct">0%</div>
     </div>

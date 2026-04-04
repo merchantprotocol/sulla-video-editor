@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulla — Templates</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-page: #f6f8fa; --bg-surface: #ffffff; --bg-elevated: #f0f2f5; --bg-hover: #e8ebef;
+    --text-primary: #1f2328; --text-secondary: #59636e; --text-muted: #8b949e; --text-dim: #b1bac4;
+    --accent: #3a7f9e; --accent-soft: rgba(58,127,158,0.08); --accent-hover: #2d6a85;
+    --green: #1a7f37; --green-soft: rgba(26,127,55,0.06);
+    --red: #cf222e; --yellow: #9a6700; --purple: #7c3aed;
+    --border: #e8ebef; --border-visible: #d1d9e0;
+    --sans: 'Inter', -apple-system, sans-serif; --mono: 'JetBrains Mono', monospace;
+    /* canvas colors (always dark) */
+    --c-bg: #0d1117; --c-surface: #161b22; --c-elevated: #1c2128; --c-border: #30363d; --c-text: #e6edf3; --c-dim: #6e7681;
+  }
+  body { background: var(--bg-page); color: var(--text-primary); font-family: var(--sans); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Nav */
+  .nav { display: flex; align-items: center; padding: 0 24px; height: 48px; background: var(--bg-surface); border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 12px; }
+  .nav-logo { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--accent); text-decoration: none; }
+  .spacer { flex: 1; }
+  .nav-link { font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 5px 12px; border-radius: 6px; transition: all 0.12s; }
+  .nav-link:hover { color: var(--text-secondary); background: var(--bg-hover); }
+  .nav-link.active { color: var(--accent); background: var(--accent-soft); }
+  .nav-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--purple)); border: none; color: white; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 8px; }
+
+  /* Layout */
+  .layout { flex: 1; display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 1fr auto; overflow: hidden; }
+
+  /* ═══ LEFT — Templates + Scenes ═══ */
+  .sidebar { grid-row: 1 / -1; background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+  .sb-section { border-bottom: 1px solid var(--border); }
+  .sb-header { display: flex; align-items: center; padding: 10px 14px; gap: 6px; cursor: pointer; }
+  .sb-header h3 { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .sb-header .spacer { flex: 1; }
+  .sb-add { width: 20px; height: 20px; background: none; border: 1px dashed var(--border-visible); border-radius: 4px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.12s; }
+  .sb-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sb-list { padding: 0 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .sb-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; transition: all 0.1s; font-size: 12px; color: var(--text-secondary); }
+  .sb-item:hover { background: var(--bg-elevated); }
+  .sb-item.selected { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+  .sb-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sb-item .sb-count { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+
+  /* Scenes list */
+  .scenes-list { flex: 1; overflow-y: auto; padding: 0 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .scenes-list::-webkit-scrollbar { width: 4px; }
+  .scenes-list::-webkit-scrollbar-thumb { background: var(--border-visible); border-radius: 2px; }
+
+  .scene-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: all 0.1s; border: 1px solid transparent; }
+  .scene-item:hover { background: var(--bg-elevated); }
+  .scene-item.selected { background: var(--accent-soft); border-color: rgba(58,127,158,0.15); }
+  .scene-num { width: 18px; height: 18px; border-radius: 4px; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--text-dim); flex-shrink: 0; }
+  .scene-item.selected .scene-num { background: var(--accent); color: white; }
+  .scene-info { flex: 1; min-width: 0; }
+  .scene-name { font-size: 11px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scene-type { font-size: 9px; color: var(--text-dim); }
+  .scene-dur { font-size: 9px; color: var(--text-dim); font-family: var(--mono); flex-shrink: 0; }
+
+  .add-scene-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; margin: 4px 6px; border: 1px dashed var(--border-visible); border-radius: 6px; background: none; color: var(--text-dim); font-family: var(--sans); font-size: 11px; cursor: pointer; transition: all 0.12s; }
+  .add-scene-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .add-scene-btn svg { width: 12px; height: 12px; }
+
+  /* ═══ CENTER — Canvas ═══ */
+  .canvas-area { background: var(--c-bg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+
+  .canvas-frame { width: 78%; aspect-ratio: 16/9; max-height: 82%; background: var(--c-surface); border-radius: 8px; border: 1px solid var(--c-border); box-shadow: 0 8px 40px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
+
+  /* Canvas elements — draggable */
+  .c-element { position: absolute; cursor: move; transition: box-shadow 0.12s; }
+  .c-element:hover { box-shadow: 0 0 0 2px var(--accent); }
+  .c-element.selected { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* Resize handles on selected element */
+  .c-element.selected::before { content: ''; position: absolute; inset: -4px; border: 1px dashed rgba(80,150,179,0.4); border-radius: 2px; pointer-events: none; }
+  .c-handle { position: absolute; width: 8px; height: 8px; background: var(--accent); border-radius: 2px; border: 1px solid white; display: none; z-index: 5; }
+  .c-element.selected .c-handle { display: block; }
+  .c-handle.tl { top: -5px; left: -5px; cursor: nw-resize; }
+  .c-handle.tr { top: -5px; right: -5px; cursor: ne-resize; }
+  .c-handle.bl { bottom: -5px; left: -5px; cursor: sw-resize; }
+  .c-handle.br { bottom: -5px; right: -5px; cursor: se-resize; }
+
+  /* Video placeholder */
+  .c-video { inset: 0; background: var(--c-elevated); display: flex; align-items: center; justify-content: center; cursor: default; }
+  .c-video svg { width: 48px; height: 48px; color: var(--c-dim); opacity: 0.2; }
+
+  /* PiP camera bubble */
+  .c-pip { bottom: 20px; right: 20px; width: 110px; height: 110px; background: var(--c-elevated); border-radius: 50%; border: 2.5px solid var(--accent); display: flex; align-items: center; justify-content: center; z-index: 3; }
+  .c-pip svg { width: 24px; height: 24px; color: var(--c-dim); pointer-events: none; }
+
+  /* Lower third */
+  .c-lower { bottom: 24px; left: 24px; display: flex; align-items: flex-end; gap: 10px; padding: 10px 16px 10px 0; z-index: 3; }
+  .c-lower-bar { width: 3px; height: 36px; background: var(--accent); border-radius: 1px; pointer-events: none; }
+  .c-lower-texts { pointer-events: none; }
+  .c-lower-name { font-size: 14px; font-weight: 700; color: var(--c-text); }
+  .c-lower-title { font-size: 9px; color: var(--c-dim); }
+
+  /* Caption overlay */
+  .c-caption { bottom: 70px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 4px; z-index: 3; white-space: nowrap; }
+  .c-caption-text { font-size: 18px; font-weight: 700; color: white; text-shadow: 0 2px 6px rgba(0,0,0,0.6); pointer-events: none; }
+  .c-caption-text .hl { color: var(--accent); }
+
+  /* Title card elements */
+  .c-title-text { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 3; }
+  .c-title-main { font-size: 24px; font-weight: 700; color: var(--c-text); pointer-events: none; white-space: nowrap; }
+  .c-title-sub { font-size: 11px; color: var(--c-dim); margin-top: 4px; pointer-events: none; }
+  .c-title-bar { width: 40px; height: 3px; background: var(--accent); border-radius: 2px; margin: 10px auto 0; pointer-events: none; }
+
+  /* Canvas toolbar — floating top */
+  .canvas-toolbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; padding: 3px; background: rgba(22,27,34,0.9); border: 1px solid var(--c-border); border-radius: 8px; backdrop-filter: blur(8px); z-index: 10; }
+  .ct-btn { width: 30px; height: 28px; background: none; border: 1px solid transparent; border-radius: 5px; color: var(--c-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.1s; position: relative; }
+  .ct-btn:hover { color: #b1bac4; background: rgba(255,255,255,0.05); }
+  .ct-btn.active { color: var(--accent); border-color: rgba(80,150,179,0.3); background: rgba(80,150,179,0.08); }
+  .ct-btn svg { width: 15px; height: 15px; }
+  .ct-divider { width: 1px; height: 20px; background: var(--c-border); align-self: center; margin: 0 2px; }
+  .ct-btn .tip { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font-size: 9px; white-space: nowrap; color: white; background: #1f2328; padding: 3px 7px; border-radius: 4px; opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 20; }
+  .ct-btn:hover .tip { opacity: 1; }
+
+  /* Format badge */
+  .format-badge { position: absolute; top: 12px; right: 12px; padding: 3px 8px; background: rgba(22,27,34,0.8); border: 1px solid var(--c-border); border-radius: 5px; font-size: 10px; font-family: var(--mono); color: var(--c-dim); z-index: 10; }
+
+  /* ═══ BOTTOM — Properties bar (context-sensitive) ═══ */
+  .props-bar { grid-column: 2; background: var(--bg-surface); border-top: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 16px; overflow-x: auto; flex-shrink: 0; min-height: 52px; }
+  .props-bar::-webkit-scrollbar { height: 0; }
+
+  .pb-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .pb-group + .pb-group { padding-left: 16px; border-left: 1px solid var(--border); }
+  .pb-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  .pb-value { padding: 4px 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 5px; font-size: 11px; color: var(--text-primary); font-family: var(--sans); cursor: pointer; white-space: nowrap; min-width: 60px; text-align: center; }
+  .pb-value:hover { border-color: var(--accent); }
+  .pb-input { width: 60px; padding: 4px 6px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 5px; font-size: 11px; color: var(--text-primary); font-family: var(--mono); text-align: center; }
+  .pb-input:focus { outline: none; border-color: var(--accent); }
+
+  .pb-swatch { width: 20px; height: 20px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; transition: all 0.1s; flex-shrink: 0; }
+  .pb-swatch:hover { transform: scale(1.1); }
+  .pb-swatch.selected { border-color: var(--text-primary); }
+
+  .pb-select { padding: 4px 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 5px; font-size: 11px; color: var(--text-primary); font-family: var(--sans); appearance: none; cursor: pointer; }
+  .pb-select:focus { outline: none; border-color: var(--accent); }
+
+  .pb-btn { padding: 4px 10px; background: none; border: 1px solid var(--border-visible); border-radius: 5px; font-size: 10px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.12s; font-family: var(--sans); white-space: nowrap; }
+  .pb-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* No selection state */
+  .pb-empty { font-size: 12px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a class="nav-logo" href="../welcome/index.html">sulla</a>
+    <div class="spacer"></div>
+    <a class="nav-link" href="../welcome/index.html">Home</a>
+    <a class="nav-link" href="../new-project/index.html">New Project</a>
+    <a class="nav-link active">Templates</a>
+    <button class="nav-avatar">J</button>
+  </nav>
+
+  <div class="layout">
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <div class="sidebar">
+      <!-- Templates -->
+      <div class="sb-section">
+        <div class="sb-header">
+          <h3>Templates</h3>
+          <div class="spacer"></div>
+          <button class="sb-add" title="New template">+</button>
+        </div>
+        <div class="sb-list">
+          <div class="sb-item selected" onclick="selectTemplate(this)"><div class="sb-dot" style="background:var(--accent);"></div> Podcast Episode <span class="sb-count">7</span></div>
+          <div class="sb-item" onclick="selectTemplate(this)"><div class="sb-dot" style="background:var(--red);"></div> YouTube Video <span class="sb-count">9</span></div>
+          <div class="sb-item" onclick="selectTemplate(this)"><div class="sb-dot" style="background:var(--green);"></div> Social Clips <span class="sb-count">4</span></div>
+          <div class="sb-item" onclick="selectTemplate(this)"><div class="sb-dot" style="background:var(--purple);"></div> Tutorial <span class="sb-count">6</span></div>
+          <div class="sb-item" onclick="selectTemplate(this)"><div class="sb-dot" style="background:var(--yellow);"></div> Interview <span class="sb-count">5</span></div>
+        </div>
+      </div>
+
+      <!-- Scenes for selected template -->
+      <div class="sb-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="sb-header">
+          <h3>Scenes</h3>
+          <div class="spacer"></div>
+          <button class="sb-add" title="Add scene">+</button>
+        </div>
+        <div class="scenes-list">
+          <div class="scene-item" onclick="selectSceneItem(this, 'title')">
+            <div class="scene-num">1</div>
+            <div class="scene-info"><div class="scene-name">Brand Intro</div><div class="scene-type">Title Card</div></div>
+            <span class="scene-dur">0:04</span>
+          </div>
+          <div class="scene-item" onclick="selectSceneItem(this, 'full')">
+            <div class="scene-num">2</div>
+            <div class="scene-info"><div class="scene-name">Welcome</div><div class="scene-type">Full Frame</div></div>
+            <span class="scene-dur">0:34</span>
+          </div>
+          <div class="scene-item selected" onclick="selectSceneItem(this, 'pip')">
+            <div class="scene-num">3</div>
+            <div class="scene-info"><div class="scene-name">Main Content</div><div class="scene-type">PiP + Lower Third</div></div>
+            <span class="scene-dur">2:18</span>
+          </div>
+          <div class="scene-item" onclick="selectSceneItem(this, 'broll')">
+            <div class="scene-num">4</div>
+            <div class="scene-info"><div class="scene-name">B-Roll Cut</div><div class="scene-type">B-Roll Overlay</div></div>
+            <span class="scene-dur">0:12</span>
+          </div>
+          <div class="scene-item" onclick="selectSceneItem(this, 'pip')">
+            <div class="scene-num">5</div>
+            <div class="scene-info"><div class="scene-name">Deep Dive</div><div class="scene-type">PiP</div></div>
+            <span class="scene-dur">1:45</span>
+          </div>
+          <div class="scene-item" onclick="selectSceneItem(this, 'caption')">
+            <div class="scene-num">6</div>
+            <div class="scene-info"><div class="scene-name">Highlight Quote</div><div class="scene-type">Caption Focus</div></div>
+            <span class="scene-dur">0:08</span>
+          </div>
+          <div class="scene-item" onclick="selectSceneItem(this, 'title')">
+            <div class="scene-num">7</div>
+            <div class="scene-info"><div class="scene-name">CTA + Outro</div><div class="scene-type">Title Card</div></div>
+            <span class="scene-dur">0:06</span>
+          </div>
+          <button class="add-scene-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Scene</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CANVAS ═══ -->
+    <div class="canvas-area" id="canvas-area" onclick="deselectAll(event)">
+      <!-- Toolbar -->
+      <div class="canvas-toolbar">
+        <button class="ct-btn active" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg><span class="tip">Select (V)</span></button>
+        <button class="ct-btn" title="Move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg><span class="tip">Move (M)</span></button>
+        <div class="ct-divider"></div>
+        <button class="ct-btn" title="Add Text" onclick="toast('Add text element')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg><span class="tip">Text (T)</span></button>
+        <button class="ct-btn" title="Add Shape" onclick="toast('Add shape')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span class="tip">Shape (S)</span></button>
+        <button class="ct-btn" title="Add Image" onclick="toast('Add image')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span class="tip">Image (I)</span></button>
+        <div class="ct-divider"></div>
+        <button class="ct-btn" title="PiP Camera" onclick="toast('Toggle PiP camera')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="7" cy="17" r="3"/></svg><span class="tip">PiP Camera</span></button>
+        <button class="ct-btn" title="Lower Third" onclick="toast('Toggle lower third')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><rect x="2" y="14" width="20" height="8" rx="1" fill="currentColor" opacity="0.15"/></svg><span class="tip">Lower Third</span></button>
+        <button class="ct-btn" title="Captions" onclick="toast('Toggle captions')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg><span class="tip">Captions</span></button>
+      </div>
+
+      <div class="format-badge">1920 x 1080</div>
+
+      <!-- Canvas frame -->
+      <div class="canvas-frame" id="canvas-frame">
+        <!-- Background video -->
+        <div class="c-element c-video">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+
+        <!-- PiP camera -->
+        <div class="c-element c-pip" id="el-pip" onclick="selectElement(event, this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div class="c-handle tl"></div><div class="c-handle tr"></div><div class="c-handle bl"></div><div class="c-handle br"></div>
+        </div>
+
+        <!-- Lower third -->
+        <div class="c-element c-lower" id="el-lower" onclick="selectElement(event, this)">
+          <div class="c-lower-bar"></div>
+          <div class="c-lower-texts">
+            <div class="c-lower-name">Speaker Name</div>
+            <div class="c-lower-title">Title &middot; Company</div>
+          </div>
+          <div class="c-handle tl"></div><div class="c-handle tr"></div><div class="c-handle bl"></div><div class="c-handle br"></div>
+        </div>
+
+        <!-- Caption -->
+        <div class="c-element c-caption" id="el-caption" onclick="selectElement(event, this)">
+          <div class="c-caption-text">The key <span class="hl">innovation</span> here is</div>
+          <div class="c-handle tl"></div><div class="c-handle tr"></div><div class="c-handle bl"></div><div class="c-handle br"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ BOTTOM PROPERTIES BAR ═══ -->
+    <div class="props-bar" id="props-bar">
+      <span class="pb-empty" id="pb-empty">Click an element on the canvas to edit its properties</span>
+
+      <!-- PiP properties (hidden by default) -->
+      <div class="pb-group" id="pb-pip" style="display:none;">
+        <span class="pb-label">PiP</span>
+      </div>
+      <div class="pb-group" id="pb-pip-shape" style="display:none;">
+        <span class="pb-label">Shape</span>
+        <select class="pb-select" onchange="changePipShape(this.value)"><option value="circle">Circle</option><option value="rounded">Rounded</option><option value="square">Square</option></select>
+      </div>
+      <div class="pb-group" id="pb-pip-size" style="display:none;">
+        <span class="pb-label">Size</span>
+        <input class="pb-input" value="110px" style="width:50px;">
+      </div>
+      <div class="pb-group" id="pb-pip-border" style="display:none;">
+        <span class="pb-label">Border</span>
+        <div class="pb-swatch selected" style="background:#3a7f9e;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#cf222e;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#1a7f37;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#7c3aed;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#ffffff;" onclick="pickBorder(this)"></div>
+      </div>
+
+      <!-- Lower third properties -->
+      <div class="pb-group" id="pb-lower" style="display:none;">
+        <span class="pb-label">Lower Third</span>
+      </div>
+      <div class="pb-group" id="pb-lower-name" style="display:none;">
+        <span class="pb-label">Name</span>
+        <input class="pb-input" value="Speaker Name" style="width:100px;text-align:left;font-family:var(--sans);">
+      </div>
+      <div class="pb-group" id="pb-lower-title" style="display:none;">
+        <span class="pb-label">Title</span>
+        <input class="pb-input" value="Title · Company" style="width:110px;text-align:left;font-family:var(--sans);">
+      </div>
+      <div class="pb-group" id="pb-lower-accent" style="display:none;">
+        <span class="pb-label">Accent</span>
+        <div class="pb-swatch selected" style="background:#3a7f9e;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#cf222e;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#1a7f37;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#7c3aed;" onclick="pickBorder(this)"></div>
+      </div>
+      <div class="pb-group" id="pb-lower-font" style="display:none;">
+        <span class="pb-label">Font</span>
+        <select class="pb-select"><option>Inter</option><option>JetBrains Mono</option><option>Georgia</option></select>
+      </div>
+
+      <!-- Caption properties -->
+      <div class="pb-group" id="pb-cap" style="display:none;">
+        <span class="pb-label">Caption</span>
+      </div>
+      <div class="pb-group" id="pb-cap-style" style="display:none;">
+        <span class="pb-label">Style</span>
+        <select class="pb-select"><option>Bold</option><option>Highlight</option><option>Outline</option><option>Box</option></select>
+      </div>
+      <div class="pb-group" id="pb-cap-size" style="display:none;">
+        <span class="pb-label">Size</span>
+        <input class="pb-input" value="18px" style="width:45px;">
+      </div>
+      <div class="pb-group" id="pb-cap-color" style="display:none;">
+        <span class="pb-label">Highlight</span>
+        <div class="pb-swatch selected" style="background:#3a7f9e;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#cf222e;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#1a7f37;" onclick="pickBorder(this)"></div>
+        <div class="pb-swatch" style="background:#e3b341;" onclick="pickBorder(this)"></div>
+      </div>
+      <div class="pb-group" id="pb-cap-pos" style="display:none;">
+        <span class="pb-label">Position</span>
+        <select class="pb-select"><option>Bottom</option><option>Center</option><option>Top</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" style="position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(20px);padding:8px 18px;background:var(--text-primary);color:white;font-size:12px;font-weight:500;border-radius:8px;opacity:0;transition:all 0.3s;pointer-events:none;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></div>
+
+<script>
+  // Toast
+  let toastTimer;
+  function toast(msg) { const el=document.getElementById('toast'); el.textContent=msg; el.style.opacity='1'; el.style.transform='translateX(-50%) translateY(0)'; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{el.style.opacity='0';el.style.transform='translateX(-50%) translateY(20px)';},2000); }
+
+  // Template selection
+  function selectTemplate(item) {
+    document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('selected'));
+    item.classList.add('selected');
+  }
+
+  // Scene selection
+  function selectSceneItem(item, type) {
+    document.querySelectorAll('.scene-item').forEach(i => i.classList.remove('selected'));
+    item.classList.add('selected');
+    // Could swap canvas content based on type here
+  }
+
+  // Element selection on canvas
+  const propGroups = { pip: ['pb-pip','pb-pip-shape','pb-pip-size','pb-pip-border'], lower: ['pb-lower','pb-lower-name','pb-lower-title','pb-lower-accent','pb-lower-font'], caption: ['pb-cap','pb-cap-style','pb-cap-size','pb-cap-color','pb-cap-pos'] };
+
+  function hideAllProps() {
+    Object.values(propGroups).flat().forEach(id => document.getElementById(id).style.display = 'none');
+    document.getElementById('pb-empty').style.display = '';
+  }
+
+  function showProps(type) {
+    hideAllProps();
+    document.getElementById('pb-empty').style.display = 'none';
+    (propGroups[type] || []).forEach(id => document.getElementById(id).style.display = 'flex');
+  }
+
+  function selectElement(e, el) {
+    e.stopPropagation();
+    document.querySelectorAll('.c-element').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+
+    if (el.id === 'el-pip') showProps('pip');
+    else if (el.id === 'el-lower') showProps('lower');
+    else if (el.id === 'el-caption') showProps('caption');
+  }
+
+  function deselectAll(e) {
+    if (e.target.closest('.c-element') || e.target.closest('.canvas-toolbar')) return;
+    document.querySelectorAll('.c-element').forEach(c => c.classList.remove('selected'));
+    hideAllProps();
+  }
+
+  // Drag elements on canvas
+  let dragging = null, dragOffX = 0, dragOffY = 0;
+
+  document.addEventListener('mousedown', function(e) {
+    const el = e.target.closest('.c-element:not(.c-video)');
+    if (!el || e.target.closest('.c-handle')) return;
+    dragging = el;
+    const rect = el.getBoundingClientRect();
+    dragOffX = e.clientX - rect.left;
+    dragOffY = e.clientY - rect.top;
+    document.body.style.cursor = 'move';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    const parent = document.getElementById('canvas-frame').getBoundingClientRect();
+    let x = e.clientX - parent.left - dragOffX;
+    let y = e.clientY - parent.top - dragOffY;
+    // Clamp
+    x = Math.max(0, Math.min(parent.width - dragging.offsetWidth, x));
+    y = Math.max(0, Math.min(parent.height - dragging.offsetHeight, y));
+    dragging.style.left = x + 'px';
+    dragging.style.top = y + 'px';
+    dragging.style.right = 'auto';
+    dragging.style.bottom = 'auto';
+    dragging.style.transform = 'none';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = null;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  // PiP shape
+  function changePipShape(shape) {
+    const pip = document.getElementById('el-pip');
+    if (shape === 'circle') pip.style.borderRadius = '50%';
+    else if (shape === 'rounded') pip.style.borderRadius = '16px';
+    else pip.style.borderRadius = '4px';
+  }
+
+  // Color swatch
+  function pickBorder(swatch) {
+    const group = swatch.parentElement;
+    group.querySelectorAll('.pb-swatch').forEach(s => s.classList.remove('selected'));
+    swatch.classList.add('selected');
+    const color = swatch.style.background;
+    const selected = document.querySelector('.c-element.selected');
+    if (selected && selected.id === 'el-pip') selected.style.borderColor = color;
+    if (selected && selected.id === 'el-lower') selected.querySelector('.c-lower-bar').style.background = color;
+  }
+</script>
+</body>
+</html>
