@@ -2,7 +2,18 @@
   "name": "sulla-video-editor",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-driven video editor powered by Sulla — programmatic composition meets transcript-based editing",
+  "description": "AI-driven video editor powered by Sulla — video editing as code",
   "license": "UNLICENSED",
-  "scripts": {}
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "build": "cd app && npm install && npm run build && cp -r dist/* ../public/",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
 }

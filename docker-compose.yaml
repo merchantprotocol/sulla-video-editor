@@ -1,0 +1,13 @@
+services:
+  app:
+    image: ghcr.io/merchantprotocol/docker-nginx-node20-ffmpeg:latest
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-80}:80"
+      - "${APP_SSL_PORT:-443}:443"
+    volumes:
+      - "./:/var/www/html:rw"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - WAZUH_MANAGER=${WAZUH_MANAGER:-}
+      - WAZUH_AGENT_NAME=${WAZUH_AGENT_NAME:-}

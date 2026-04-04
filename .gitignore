@@ -12,3 +12,6 @@ dist/
 output/
 .sulla-project
 .DS_Store
+public/assets/
+public/index.html
+package-lock.json
