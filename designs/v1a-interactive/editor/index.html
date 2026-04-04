@@ -93,9 +93,45 @@
   .speaker-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
   .speaker-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); border: 1.5px solid rgba(58,127,158,0.25); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--accent); }
   .speaker-info { display: flex; flex-direction: column; }
-  .speaker-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .speaker-name { font-size: 13px; font-weight: 600; color: var(--text-primary); cursor: pointer; border-radius: 3px; padding: 0 2px; transition: background 0.12s; }
+  .speaker-name:hover { background: var(--accent-soft); }
+  .speaker-name-input { font-size: 13px; font-weight: 600; color: var(--text-primary); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; font-family: var(--sans); outline: none; background: var(--accent-soft); width: 140px; }
   .speaker-time { font-size: 11px; font-family: var(--mono); color: var(--text-dim); cursor: pointer; }
   .speaker-time:hover { color: var(--accent); }
+  .speaker-ctx { position: absolute; right: 0; top: 4px; width: 22px; height: 22px; background: none; border: none; color: var(--text-dim); cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.12s; }
+  .speaker-header:hover .speaker-ctx { opacity: 1; }
+  .speaker-ctx:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .speaker-ctx svg { width: 14px; height: 14px; }
+
+  /* Speaker context menu */
+  .speaker-menu { position: absolute; top: 32px; right: 0; width: 180px; background: var(--bg-surface); border: 1px solid var(--border-visible); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 4px; display: none; z-index: 50; }
+  .speaker-menu.open { display: block; }
+  .sm-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-radius: 5px; transition: all 0.08s; }
+  .sm-item:hover { background: var(--accent-soft); color: var(--text-primary); }
+  .sm-item svg { width: 13px; height: 13px; color: var(--text-muted); flex-shrink: 0; }
+  .sm-divider { height: 1px; background: var(--border); margin: 3px 0; }
+
+  /* Sulla command palette */
+  .cmd-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.3); display: flex; align-items: flex-start; justify-content: center; padding-top: 20vh; opacity: 0; visibility: hidden; transition: all 0.2s; backdrop-filter: blur(2px); }
+  .cmd-overlay.open { opacity: 1; visibility: visible; }
+  .cmd-box { width: 520px; background: var(--bg-surface); border: 1px solid var(--border-visible); border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,0.15); overflow: hidden; transform: translateY(-10px) scale(0.98); transition: transform 0.2s; }
+  .cmd-overlay.open .cmd-box { transform: translateY(0) scale(1); }
+  .cmd-input-row { display: flex; align-items: center; padding: 12px 16px; gap: 10px; border-bottom: 1px solid var(--border); }
+  .cmd-sulla-icon { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #7c3aed); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: white; flex-shrink: 0; }
+  .cmd-input { flex: 1; border: none; background: none; color: var(--text-primary); font-family: var(--sans); font-size: 15px; outline: none; }
+  .cmd-input::placeholder { color: var(--text-dim); }
+  .cmd-hint { font-size: 10px; color: var(--text-dim); font-family: var(--mono); flex-shrink: 0; padding: 2px 6px; background: var(--bg-elevated); border-radius: 3px; }
+  .cmd-results { max-height: 300px; overflow-y: auto; }
+  .cmd-group-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 16px 4px; }
+  .cmd-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer; transition: background 0.08s; }
+  .cmd-item:hover, .cmd-item.active { background: var(--accent-soft); }
+  .cmd-item-icon { width: 20px; height: 20px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cmd-item-icon svg { width: 15px; height: 15px; }
+  .cmd-item-text { flex: 1; font-size: 13px; color: var(--text-primary); }
+  .cmd-item-desc { font-size: 10px; color: var(--text-dim); }
+  .cmd-item-shortcut { font-size: 10px; font-family: var(--mono); color: var(--text-dim); padding: 1px 5px; background: var(--bg-elevated); border-radius: 3px; }
+  .cmd-footer { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; gap: 12px; font-size: 10px; color: var(--text-dim); }
+  .cmd-footer kbd { padding: 1px 4px; background: var(--bg-elevated); border-radius: 3px; font-family: var(--mono); font-size: 9px; }
 
   .transcript-text { font-size: 16px; line-height: 2; color: var(--text-primary); font-weight: 400; }
 
@@ -523,8 +559,18 @@
             <div class="speaker-header">
               <div class="speaker-avatar">J</div>
               <div class="speaker-info">
-                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-name" onclick="renameSpeaker(this)">Jonathon</div>
                 <div class="speaker-time" onclick="toast('Seeking to 00:00')">00:00</div>
+              </div>
+              <button class="speaker-ctx" onclick="toggleSpeakerMenu(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              <div class="speaker-menu">
+                <div class="sm-item" onclick="renameSpeaker(this.closest('.speaker-header').querySelector('.speaker-name'))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rename Speaker</div>
+                <div class="sm-item" onclick="changeSpeakerColor(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Change Color</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="mergeWithPrevious(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg> Merge with Above</div>
+                <div class="sm-item" onclick="splitBlock(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg> Split Block</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="assignSpeaker(this, 'Speaker 2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Assign to Speaker 2</div>
               </div>
             </div>
             <div class="transcript-text">
@@ -539,8 +585,18 @@
             <div class="speaker-header">
               <div class="speaker-avatar">J</div>
               <div class="speaker-info">
-                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-name" onclick="renameSpeaker(this)">Jonathon</div>
                 <div class="speaker-time" onclick="toast('Seeking to 00:34')">00:34</div>
+              </div>
+              <button class="speaker-ctx" onclick="toggleSpeakerMenu(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              <div class="speaker-menu">
+                <div class="sm-item" onclick="renameSpeaker(this.closest('.speaker-header').querySelector('.speaker-name'))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rename Speaker</div>
+                <div class="sm-item" onclick="changeSpeakerColor(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Change Color</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="mergeWithPrevious(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg> Merge with Above</div>
+                <div class="sm-item" onclick="splitBlock(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg> Split Block</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="assignSpeaker(this, 'Speaker 2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Assign to Speaker 2</div>
               </div>
             </div>
             <div class="transcript-text">
@@ -555,8 +611,18 @@
             <div class="speaker-header">
               <div class="speaker-avatar">J</div>
               <div class="speaker-info">
-                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-name" onclick="renameSpeaker(this)">Jonathon</div>
                 <div class="speaker-time" onclick="toast('Seeking to 01:12')">01:12</div>
+              </div>
+              <button class="speaker-ctx" onclick="toggleSpeakerMenu(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              <div class="speaker-menu">
+                <div class="sm-item" onclick="renameSpeaker(this.closest('.speaker-header').querySelector('.speaker-name'))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rename Speaker</div>
+                <div class="sm-item" onclick="changeSpeakerColor(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Change Color</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="mergeWithPrevious(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg> Merge with Above</div>
+                <div class="sm-item" onclick="splitBlock(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg> Split Block</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="assignSpeaker(this, 'Speaker 2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Assign to Speaker 2</div>
               </div>
             </div>
             <div class="transcript-text">
@@ -571,8 +637,18 @@
             <div class="speaker-header">
               <div class="speaker-avatar">J</div>
               <div class="speaker-info">
-                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-name" onclick="renameSpeaker(this)">Jonathon</div>
                 <div class="speaker-time" onclick="toast('Seeking to 01:58')">01:58</div>
+              </div>
+              <button class="speaker-ctx" onclick="toggleSpeakerMenu(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              <div class="speaker-menu">
+                <div class="sm-item" onclick="renameSpeaker(this.closest('.speaker-header').querySelector('.speaker-name'))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rename Speaker</div>
+                <div class="sm-item" onclick="changeSpeakerColor(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Change Color</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="mergeWithPrevious(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg> Merge with Above</div>
+                <div class="sm-item" onclick="splitBlock(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg> Split Block</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="assignSpeaker(this, 'Speaker 2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Assign to Speaker 2</div>
               </div>
             </div>
             <div class="transcript-text">
@@ -587,8 +663,18 @@
             <div class="speaker-header">
               <div class="speaker-avatar">J</div>
               <div class="speaker-info">
-                <div class="speaker-name">Jonathon</div>
+                <div class="speaker-name" onclick="renameSpeaker(this)">Jonathon</div>
                 <div class="speaker-time" onclick="toast('Seeking to 03:22')">03:22</div>
+              </div>
+              <button class="speaker-ctx" onclick="toggleSpeakerMenu(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              <div class="speaker-menu">
+                <div class="sm-item" onclick="renameSpeaker(this.closest('.speaker-header').querySelector('.speaker-name'))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rename Speaker</div>
+                <div class="sm-item" onclick="changeSpeakerColor(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Change Color</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="mergeWithPrevious(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg> Merge with Above</div>
+                <div class="sm-item" onclick="splitBlock(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg> Split Block</div>
+                <div class="sm-divider"></div>
+                <div class="sm-item" onclick="assignSpeaker(this, 'Speaker 2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Assign to Speaker 2</div>
               </div>
             </div>
             <div class="transcript-text">
@@ -713,9 +799,9 @@
           <div class="option-row"><span class="option-label">Burn into video</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
           <div class="option-row"><span class="option-label">Word-by-word highlight</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
           <div class="option-row"><span class="option-label">Emoji detection</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
-          <div class="option-row"><span class="option-label">Position</span><span class="option-value">Bottom center</span></div>
-          <div class="option-row"><span class="option-label">Font size</span><span class="option-value">32px</span></div>
-          <div class="option-row"><span class="option-label">Max words per line</span><span class="option-value">4</span></div>
+          <div class="option-row"><span class="option-label">Position</span><select class="pb-select" style="font-size:12px;padding:6px 8px;border:1px solid var(--border-visible);border-radius:5px;background:var(--bg-elevated);color:var(--text-primary);font-family:var(--sans);"><option>Bottom center</option><option>Top center</option><option>Center</option></select></div>
+          <div class="option-row"><span class="option-label">Font size</span><input type="range" min="16" max="48" value="32" style="width:80px;accent-color:var(--accent);" oninput="this.nextElementSibling.textContent=this.value+'px'"><span style="font-size:11px;color:var(--text-primary);font-family:var(--mono);min-width:30px;">32px</span></div>
+          <div class="option-row"><span class="option-label">Max words per line</span><select class="pb-select" style="font-size:12px;padding:6px 8px;border:1px solid var(--border-visible);border-radius:5px;background:var(--bg-elevated);color:var(--text-primary);font-family:var(--sans);"><option>3</option><option selected>4</option><option>5</option><option>6</option></select></div>
           <button class="export-go" onclick="closePanel('captions-panel'); simulateProgress('Generating captions...', 'Syncing words to timeline', 'Captions generated')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Generate Captions</button>
         </div>
       </div>
@@ -756,8 +842,8 @@
             <button class="fmt-chip" onclick="selectFmt(this)">4:5</button>
           </div>
           <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin:16px 0 10px;">Settings</div>
-          <div class="option-row"><span class="option-label">Resolution</span><span class="option-value">1080p</span></div>
-          <div class="option-row"><span class="option-label">Quality</span><span class="option-value">High (H.264)</span></div>
+          <div class="option-row"><span class="option-label">Resolution</span><select class="pb-select" style="font-size:12px;padding:6px 8px;border:1px solid var(--border-visible);border-radius:5px;background:var(--bg-elevated);color:var(--text-primary);font-family:var(--sans);"><option>1080p</option><option>4K</option><option>720p</option></select></div>
+          <div class="option-row"><span class="option-label">Quality</span><select class="pb-select" style="font-size:12px;padding:6px 8px;border:1px solid var(--border-visible);border-radius:5px;background:var(--bg-elevated);color:var(--text-primary);font-family:var(--sans);"><option>High (H.264)</option><option>ProRes</option><option>WebM</option></select></div>
           <div class="option-row"><span class="option-label">Include captions</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
           <div class="option-row"><span class="option-label">Studio sound</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
           <div class="option-row"><span class="option-label">Auto-reframe (face track)</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
@@ -924,6 +1010,37 @@
     <div class="ctx-divider"></div>
     <div class="ctx-item" onclick="ctxAction('split')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg> Split Scene Here</div>
     <div class="ctx-item" onclick="ctxAction('addBroll')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Insert B-Roll Here</div>
+  </div>
+
+  <!-- Sulla Command Palette -->
+  <div class="cmd-overlay" id="cmd-overlay" onclick="if(event.target===this) closeCmdPalette()">
+    <div class="cmd-box">
+      <div class="cmd-input-row">
+        <div class="cmd-sulla-icon">S</div>
+        <input class="cmd-input" id="cmd-input" placeholder="Ask Sulla anything..." oninput="filterCommands(this.value)" autofocus>
+        <span class="cmd-hint">ESC</span>
+      </div>
+      <div class="cmd-results" id="cmd-results">
+        <div class="cmd-group-label">Quick Actions</div>
+        <div class="cmd-item" data-cmd="fillers" onclick="cmdExec('removeAllFillers')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div><div class="cmd-item-text">Remove all filler words</div><div class="cmd-item-desc">23 found</div></div>
+        <div class="cmd-item" data-cmd="silence" onclick="cmdExec('trimAllSilence')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div><div class="cmd-item-text">Trim all silence</div><div class="cmd-item-desc">8 pauses</div></div>
+        <div class="cmd-item" data-cmd="clean" onclick="cmdExec('cleanAll')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><div class="cmd-item-text">Clean All (fillers + silence)</div></div>
+        <div class="cmd-item" data-cmd="studio" onclick="cmdExec('applyStudioSound')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></div><div class="cmd-item-text">Apply Studio Sound</div></div>
+        <div class="cmd-group-label">Panels</div>
+        <div class="cmd-item" data-cmd="captions" onclick="cmdExec('openCaptions')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg></div><div class="cmd-item-text">Generate Captions</div></div>
+        <div class="cmd-item" data-cmd="clips" onclick="cmdExec('openClips')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M10 2v20"/></svg></div><div class="cmd-item-text">Auto Clips</div><div class="cmd-item-desc">7 clips</div></div>
+        <div class="cmd-item" data-cmd="export" onclick="cmdExec('openExport')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div><div class="cmd-item-text">Export Video</div><div class="cmd-item-shortcut">&#8984;E</div></div>
+        <div class="cmd-group-label">Edit</div>
+        <div class="cmd-item" data-cmd="hook" onclick="cmdExec('applyHookFix')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><div class="cmd-item-text">Fix weak opening hook</div></div>
+        <div class="cmd-item" data-cmd="normalize" onclick="cmdExec('applyNormalize')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></div><div class="cmd-item-text">Normalize audio to -14 LUFS</div></div>
+        <div class="cmd-item" data-cmd="translate" onclick="cmdExec('translate')"><div class="cmd-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg></div><div class="cmd-item-text">Translate captions</div></div>
+      </div>
+      <div class="cmd-footer">
+        <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> navigate</span>
+        <span><kbd>Enter</kbd> select</span>
+        <span><kbd>Esc</kbd> close</span>
+      </div>
+    </div>
   </div>
 
   <!-- Undo Toast -->
@@ -1638,6 +1755,190 @@
       document.body.style.userSelect = '';
     });
   })();
+
+  // ═══ Speaker Management ═══
+  function renameSpeaker(el) {
+    const current = el.textContent;
+    const input = document.createElement('input');
+    input.className = 'speaker-name-input';
+    input.value = current;
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+      const newName = input.value.trim() || current;
+      const span = document.createElement('div');
+      span.className = 'speaker-name';
+      span.textContent = newName;
+      span.onclick = function() { renameSpeaker(span); };
+      input.replaceWith(span);
+      // Update avatar
+      const avatar = span.closest('.speaker-header').querySelector('.speaker-avatar');
+      if (avatar) avatar.textContent = newName.charAt(0).toUpperCase();
+      toast('Speaker renamed to "' + newName + '"');
+    }
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { input.value = current; commit(); }
+    });
+  }
+
+  function toggleSpeakerMenu(btn) {
+    // Close all other menus first
+    document.querySelectorAll('.speaker-menu.open').forEach(m => m.classList.remove('open'));
+    const menu = btn.nextElementSibling;
+    menu.classList.toggle('open');
+    event.stopPropagation();
+  }
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.speaker-menu') && !e.target.closest('.speaker-ctx')) {
+      document.querySelectorAll('.speaker-menu.open').forEach(m => m.classList.remove('open'));
+    }
+  });
+
+  function changeSpeakerColor(menuItem) {
+    const colors = ['#3a7f9e', '#cf222e', '#1a7f37', '#7c3aed', '#9a6700', '#f0883e'];
+    const block = menuItem.closest('.speaker-block');
+    const avatar = block.querySelector('.speaker-avatar');
+    const current = getComputedStyle(avatar).borderColor;
+    const next = colors[(colors.indexOf(avatar.style.borderColor) + 1) % colors.length] || colors[1];
+    avatar.style.borderColor = next;
+    avatar.style.background = next + '15';
+    avatar.style.color = next;
+    closeSpeakerMenus();
+    toast('Speaker color changed');
+  }
+
+  function mergeWithPrevious(menuItem) {
+    const block = menuItem.closest('.speaker-block');
+    const prev = block.previousElementSibling;
+    if (prev && prev.classList.contains('scene-divider')) {
+      const prevBlock = prev.previousElementSibling;
+      if (prevBlock && prevBlock.classList.contains('speaker-block')) {
+        const text = block.querySelector('.transcript-text');
+        prevBlock.querySelector('.transcript-text').innerHTML += ' ' + text.innerHTML;
+        prev.remove();
+        block.remove();
+        toast('Blocks merged');
+        return;
+      }
+    }
+    if (prev && prev.classList.contains('speaker-block')) {
+      const text = block.querySelector('.transcript-text');
+      prev.querySelector('.transcript-text').innerHTML += ' ' + text.innerHTML;
+      block.remove();
+      toast('Blocks merged');
+      return;
+    }
+    toast('No block above to merge with');
+    closeSpeakerMenus();
+  }
+
+  function splitBlock(menuItem) {
+    closeSpeakerMenus();
+    toast('Select a word in the block to split at that point (use right-click > Split Scene)');
+  }
+
+  function assignSpeaker(menuItem, name) {
+    const block = menuItem.closest('.speaker-block');
+    block.querySelector('.speaker-name').textContent = name;
+    block.querySelector('.speaker-avatar').textContent = name.charAt(0);
+    closeSpeakerMenus();
+    toast('Block assigned to ' + name);
+  }
+
+  function closeSpeakerMenus() {
+    document.querySelectorAll('.speaker-menu.open').forEach(m => m.classList.remove('open'));
+  }
+
+  // ═══ Sulla Command Palette ═══
+  function openCmdPalette() {
+    document.getElementById('cmd-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('cmd-input').focus(), 100);
+  }
+
+  function closeCmdPalette() {
+    document.getElementById('cmd-overlay').classList.remove('open');
+    document.getElementById('cmd-input').value = '';
+    // Show all items
+    document.querySelectorAll('.cmd-item, .cmd-group-label').forEach(i => i.style.display = '');
+  }
+
+  function filterCommands(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll('.cmd-item').forEach(item => {
+      const text = item.querySelector('.cmd-item-text').textContent.toLowerCase();
+      item.style.display = text.includes(q) ? '' : 'none';
+    });
+  }
+
+  function cmdExec(action) {
+    closeCmdPalette();
+    if (action === 'removeAllFillers') removeAllFillers();
+    else if (action === 'trimAllSilence') trimAllSilence();
+    else if (action === 'cleanAll') cleanAll();
+    else if (action === 'applyStudioSound') applyStudioSound();
+    else if (action === 'openCaptions') openPanel('captions-panel');
+    else if (action === 'openClips') openPanel('clips-panel');
+    else if (action === 'openExport') openPanel('export-panel');
+    else if (action === 'applyHookFix') applyHookFix();
+    else if (action === 'applyNormalize') applyNormalize();
+    else if (action === 'translate') toast('Translation: coming soon');
+  }
+
+  // Cmd+K to open palette, update existing keyboard handler
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      if (document.getElementById('cmd-overlay').classList.contains('open')) closeCmdPalette();
+      else openCmdPalette();
+    }
+  });
+
+  // Update the Ask Sulla toolbar button
+  document.querySelectorAll('.tb-btn[title="Ask Sulla"]').forEach(btn => {
+    btn.onclick = function() { openCmdPalette(); };
+  });
+
+  // ═══ Timeline Zoom ═══
+  let zoomLevel = 1;
+  function zoomTimeline(dir) {
+    zoomLevel = Math.max(0.5, Math.min(3, zoomLevel + dir * 0.25));
+    const ruler = document.getElementById('track-ruler');
+    const marks = ruler.querySelectorAll('.ruler-mark');
+    const baseSpacing = 100;
+    marks.forEach((mark, i) => {
+      mark.style.left = (140 + i * baseSpacing * zoomLevel) + 'px';
+    });
+    // Scale clip widths
+    document.querySelectorAll('.track-clip').forEach(clip => {
+      clip.style.right = (3 / zoomLevel) + '%';
+    });
+    toast('Zoom: ' + Math.round(zoomLevel * 100) + '%');
+  }
+
+  // ═══ Accessibility — focus rings + aria-labels ═══
+  // Add focus-visible outlines
+  const style = document.createElement('style');
+  style.textContent = `
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button:focus-visible, .tb-btn:focus-visible, .sug-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .silence { border-bottom: 1px dashed var(--yellow); }
+  `;
+  document.head.appendChild(style);
+
+  // Add aria-labels to toolbar buttons
+  document.querySelectorAll('.tb-btn').forEach(btn => {
+    const tip = btn.querySelector('.tip');
+    if (tip) btn.setAttribute('aria-label', tip.textContent);
+  });
+  document.querySelectorAll('.trk-btn').forEach(btn => {
+    btn.setAttribute('aria-label', btn.title || btn.textContent);
+  });
 </script>
 </body>
 </html>
