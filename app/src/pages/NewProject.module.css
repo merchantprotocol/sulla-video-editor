@@ -1,0 +1,47 @@
+.main { flex: 1; overflow-y: auto; padding: 48px 32px; }
+.container { max-width: 640px; margin: 0 auto; }
+.title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.desc { font-size: 14px; color: var(--text-muted); margin-bottom: 32px; }
+
+.dropZone { padding: 48px 40px; border: 2px dashed var(--border-visible); border-radius: 16px; background: var(--bg-surface); text-align: center; transition: all 0.2s; cursor: pointer; margin-bottom: 32px; }
+.dropZone:hover { border-color: var(--accent); background: var(--accent-soft); }
+.hasFile { border-style: solid; border-color: var(--green); background: var(--green-soft); }
+
+.dropEmpty { display: flex; flex-direction: column; align-items: center; }
+.dropIcon { width: 56px; height: 56px; margin-bottom: 16px; background: var(--accent-soft); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.dropIcon svg { width: 28px; height: 28px; }
+.dropTitle { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.dropDesc { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+.dropFormats { font-size: 11px; color: var(--text-dim); }
+
+.fileInfo { display: flex; align-items: center; gap: 14px; text-align: left; }
+.fileIcon { width: 48px; height: 48px; background: var(--green-soft); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--green); flex-shrink: 0; }
+.fileIcon svg { width: 24px; height: 24px; }
+.fileDetails { flex: 1; }
+.fileName { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.fileMeta { font-size: 11px; color: var(--text-muted); }
+.fileRemove { width: 28px; height: 28px; background: none; border: 1px solid var(--border-visible); border-radius: 6px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.fileRemove:hover { border-color: var(--red); color: var(--red); }
+
+.formSection { margin-bottom: 24px; }
+.formLabel { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; display: block; }
+.formInput { width: 100%; padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-visible); border-radius: 8px; color: var(--text-primary); font-family: var(--sans); font-size: 13px; }
+.formInput:focus { outline: none; border-color: var(--accent); }
+
+.ruleGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ruleCard { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--bg-surface); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.12s; }
+.ruleCard:hover { border-color: var(--border-visible); }
+.selected { border-color: var(--accent); background: var(--accent-soft); }
+.ruleIcon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; background: var(--bg-elevated); }
+.ruleInfo { flex: 1; }
+.ruleName { font-size: 12px; font-weight: 600; }
+.ruleDesc { font-size: 10px; color: var(--text-muted); }
+.ruleCheck { width: 18px; height: 18px; border: 1.5px solid var(--border-visible); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.selected .ruleCheck { background: var(--accent); border-color: var(--accent); color: white; }
+.ruleCheck svg { width: 10px; height: 10px; }
+
+.actions { display: flex; gap: 10px; padding-top: 16px; }
+.cancelBtn { padding: 14px 24px; background: none; border: 1px solid var(--border-visible); border-radius: 10px; color: var(--text-secondary); font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; }
+.createBtn { flex: 1; padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: white; font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.createBtn:hover { background: var(--accent-hover); }
+.createBtn svg { width: 18px; height: 18px; }
