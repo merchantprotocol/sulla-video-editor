@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { useDraggable, type Position } from '../hooks/useDraggable'
 import styles from './VideoOverlays.module.css'
 
@@ -25,6 +25,7 @@ export interface OverlayItem {
   opacity?: number
   src?: string // image url for logo, video url for pip
   shape?: 'circle' | 'rounded' | 'square'
+  videoTrackIndex?: number // index of video track to use as PiP source
 }
 
 export function createOverlay(type: OverlayType, partial?: Partial<OverlayItem>): OverlayItem {
@@ -86,14 +87,41 @@ interface OverlayProps {
   selected: boolean
   onSelect: () => void
   onUpdate: (item: OverlayItem) => void
+  mediaSrc?: string
+  mainVideoRef?: React.RefObject<HTMLVideoElement | null>
+  onContextMenu?: (e: React.MouseEvent, id: string) => void
 }
 
-function DraggableItem({ item, containerRef, selected, onSelect, onUpdate }: OverlayProps) {
+function DraggableItem({ item, containerRef, selected, onSelect, onUpdate, mediaSrc, mainVideoRef, onContextMenu }: OverlayProps) {
+  const pipVideoRef = useRef<HTMLVideoElement>(null)
   const setPosition = useCallback((pos: Position) => {
     onUpdate({ ...item, position: pos })
   }, [item, onUpdate])
 
   const { onMouseDown } = useDraggable(containerRef, item.position, setPosition)
+
+  // Sync PiP video with main video playback
+  useEffect(() => {
+    if (item.type !== 'pip' || !pipVideoRef.current || !mainVideoRef?.current) return
+    const main = mainVideoRef.current
+    const pip = pipVideoRef.current
+
+    const syncTime = () => { if (Math.abs(pip.currentTime - main.currentTime) > 0.3) pip.currentTime = main.currentTime }
+    const onPlay = () => { syncTime(); pip.play().catch(() => {}) }
+    const onPause = () => { pip.pause(); syncTime() }
+    const onSeeked = () => { pip.currentTime = main.currentTime }
+
+    main.addEventListener('play', onPlay)
+    main.addEventListener('pause', onPause)
+    main.addEventListener('seeked', onSeeked)
+    if (!main.paused) pip.play().catch(() => {})
+
+    return () => {
+      main.removeEventListener('play', onPlay)
+      main.removeEventListener('pause', onPause)
+      main.removeEventListener('seeked', onSeeked)
+    }
+  }, [item.type, item.videoTrackIndex, mainVideoRef])
 
   if (!item.visible) return null
 
@@ -109,12 +137,21 @@ function DraggableItem({ item, containerRef, selected, onSelect, onUpdate }: Ove
     zIndex: selected ? 20 : 10,
   }
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onSelect()
+    onContextMenu?.(e, item.id)
+  }
+
   if (item.type === 'pip') {
+    const hasVideoSource = item.videoTrackIndex != null && mediaSrc
     return (
       <div
         className={`${styles.overlay} ${selected ? styles.overlaySelected : ''}`}
         style={style}
         onMouseDown={(e) => { onSelect(); onMouseDown(e) }}
+        onContextMenu={handleContextMenu}
       >
         <div
           className={styles.pip}
@@ -124,9 +161,24 @@ function DraggableItem({ item, containerRef, selected, onSelect, onUpdate }: Ove
             borderWidth: item.borderWidth || 3,
           }}
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
-            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-          </svg>
+          {hasVideoSource ? (
+            <video
+              ref={pipVideoRef}
+              className={styles.pipVideo}
+              src={mediaSrc}
+              muted
+              playsInline
+              onLoadedMetadata={() => {
+                if (pipVideoRef.current && mainVideoRef?.current) {
+                  pipVideoRef.current.currentTime = mainVideoRef.current.currentTime
+                }
+              }}
+            />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
+              <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+            </svg>
+          )}
         </div>
         {selected && <div className={styles.overlayLabel}>{item.label || 'PiP'}</div>}
       </div>
@@ -139,6 +191,7 @@ function DraggableItem({ item, containerRef, selected, onSelect, onUpdate }: Ove
         className={`${styles.overlay} ${selected ? styles.overlaySelected : ''}`}
         style={style}
         onMouseDown={(e) => { onSelect(); onMouseDown(e) }}
+        onContextMenu={handleContextMenu}
       >
         <div
           className={styles.captionBox}
@@ -163,6 +216,7 @@ function DraggableItem({ item, containerRef, selected, onSelect, onUpdate }: Ove
         className={`${styles.overlay} ${selected ? styles.overlaySelected : ''}`}
         style={style}
         onMouseDown={(e) => { onSelect(); onMouseDown(e) }}
+        onContextMenu={handleContextMenu}
       >
         <div
           className={styles.textBox}
@@ -187,6 +241,7 @@ function DraggableItem({ item, containerRef, selected, onSelect, onUpdate }: Ove
         className={`${styles.overlay} ${selected ? styles.overlaySelected : ''}`}
         style={style}
         onMouseDown={(e) => { onSelect(); onMouseDown(e) }}
+        onContextMenu={handleContextMenu}
       >
         <div
           className={styles.logoBox}
@@ -219,9 +274,12 @@ interface VideoOverlaysProps {
   containerRef: React.RefObject<HTMLElement | null>
   onSelect: (id: string | null) => void
   onUpdate: (item: OverlayItem) => void
+  mediaSrc?: string
+  mainVideoRef?: React.RefObject<HTMLVideoElement | null>
+  onContextMenu?: (e: React.MouseEvent, id: string) => void
 }
 
-export default function VideoOverlays({ overlays, selectedId, containerRef, onSelect, onUpdate }: VideoOverlaysProps) {
+export default function VideoOverlays({ overlays, selectedId, containerRef, onSelect, onUpdate, mediaSrc, mainVideoRef, onContextMenu }: VideoOverlaysProps) {
   return (
     <>
       {overlays.map(item => (
@@ -232,6 +290,9 @@ export default function VideoOverlays({ overlays, selectedId, containerRef, onSe
           selected={selectedId === item.id}
           onSelect={() => onSelect(item.id)}
           onUpdate={onUpdate}
+          mediaSrc={mediaSrc}
+          mainVideoRef={mainVideoRef}
+          onContextMenu={onContextMenu}
         />
       ))}
     </>

@@ -34,7 +34,13 @@ export default function Editor() {
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const videoFrameRef = useRef<HTMLDivElement>(null)
+  const overlayCanvasRef = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  // Design canvas size — overlays render at this resolution, then scale down
+  const DESIGN_W = 1920
+  const DESIGN_H = 1080
+  const [canvasScale, setCanvasScale] = useState(1)
 
   // UI state
   const [trackPanelCollapsed, setTrackPanelCollapsed] = useState(false)
@@ -58,6 +64,7 @@ export default function Editor() {
   const [speakerMenuOpen, setSpeakerMenuOpen] = useState<number | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; wordIdx?: number } | null>(null)
   const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
+  const [overlayCtxMenu, setOverlayCtxMenu] = useState<{ x: number; y: number; overlayId: string } | null>(null)
   const [showSceneBreaks, setShowSceneBreaks] = useState(true)
   const [waveformData, setWaveformData] = useState<number[] | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -84,6 +91,18 @@ export default function Editor() {
       getWaveform().then(data => setWaveformData(data.amplitudes || null)).catch(() => {})
     }
   }, [files.hasTranscript, files.hasEdl, files.hasWaveform])
+
+  // Track video frame size → compute overlay canvas scale
+  useEffect(() => {
+    const el = videoFrameRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      if (w > 0) setCanvasScale(w / DESIGN_W)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [DESIGN_W])
 
   // Auto-save EDL on changes (debounced)
   useEffect(() => {
@@ -188,6 +207,9 @@ export default function Editor() {
       }
       if (!target.closest(`.${styles.trackCtxMenu}`)) {
         setTrackCtxMenu(null)
+      }
+      if (!target.closest(`.${styles.overlayCtxMenu}`)) {
+        setOverlayCtxMenu(null)
       }
     }
     document.addEventListener('click', handleClick)
@@ -1377,13 +1399,22 @@ export default function Editor() {
                 Video Preview
               </div>
             )}
-            <VideoOverlays
-              overlays={overlays}
-              selectedId={selectedOverlayId}
-              containerRef={videoFrameRef}
-              onSelect={setSelectedOverlayId}
-              onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
-            />
+            <div
+              className={styles.overlayCanvas}
+              style={{ width: DESIGN_W, height: DESIGN_H, transform: `scale(${canvasScale})` }}
+              ref={overlayCanvasRef}
+            >
+              <VideoOverlays
+                overlays={overlays}
+                selectedId={selectedOverlayId}
+                containerRef={overlayCanvasRef}
+                onSelect={setSelectedOverlayId}
+                onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
+                mediaSrc={project.media_path ? `/api/projects/${project.id}/media/source${project.media_path?.match(/\.\w+$/)?.[0] || '.mp4'}` : undefined}
+                mainVideoRef={videoRef}
+                onContextMenu={(e, id) => { setOverlayCtxMenu({ x: e.clientX, y: e.clientY, overlayId: id }); setSelectedOverlayId(id) }}
+              />
+            </div>
           </div>
           {project.media_path && (
             <div className={styles.videoControls}>
@@ -1415,6 +1446,7 @@ export default function Editor() {
               onAdd={(item) => setOverlays(prev => [...prev, item])}
               onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
               onRemove={(id) => { setOverlays(prev => prev.filter(o => o.id !== id)); if (selectedOverlayId === id) setSelectedOverlayId(null) }}
+              videoTracks={tracks.filter(t => t.type === 'video').map((t, i) => ({ index: t.index, label: t.label || `Video ${i + 1}`, width: t.width, height: t.height }))}
             />
           </div>
 
@@ -1635,7 +1667,7 @@ export default function Editor() {
               return (
                 <div
                   key={trackId}
-                  className={`${styles.trackRow} ${selectedTrack === trackId ? styles.trackRowSelected : ''} ${isTrackMuted(trackId) ? styles.trackRowMuted : ''}`}
+                  className={`${styles.trackRow} ${selectedTrack === trackId ? styles.trackRowSelected : ''} ${isTrackMuted(trackId) ? styles.trackRowMuted : ''} ${isAudio && transcript ? styles.trackRowWithTranscript : ''}`}
                   onClick={() => setSelectedTrack(trackId)}
                   onContextMenu={(e) => handleTrackContextMenu(e, trackId, track.type, name)}
                 >
@@ -1660,46 +1692,54 @@ export default function Editor() {
                 seekTo(Math.max(0, Math.min(durationSec, time)))
               }}>
                 <div className={`${styles.trackClip} ${clipStyle}`} style={{ left: 0, right: '3%' }}>
-                  {isAudio && transcript && durationSec > 0 ? (
-                    <div className={styles.trackWords}>
-                      {transcript.words.map((word, wi) => {
-                        const left = (word.start / durationSec) * 100
-                        const width = Math.max(0.2, ((word.end - word.start) / durationSec) * 100)
-                        const isCutWord = editor.isCut(word.start * 1000, word.end * 1000)
-                        return (
-                          <span
-                            key={wi}
-                            className={`${styles.trackWord} ${word.filler ? styles.trackWordFiller : ''} ${isCutWord ? styles.trackWordCut : ''}`}
-                            style={{ left: `${left}%`, width: `${width}%` }}
-                            title={word.word}
-                          >
-                            {width > 1 ? word.word : ''}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  ) : isAudio && waveformData ? (
-                    <div className={styles.waveBars}>
-                      {(() => {
-                        // Downsample waveform to fit the track width (~300 bars)
-                        const targetBars = 300
-                        const step = Math.max(1, Math.floor(waveformData.length / targetBars))
-                        const bars: number[] = []
-                        for (let i = 0; i < waveformData.length; i += step) {
-                          const chunk = waveformData.slice(i, i + step)
-                          const max = Math.max(...chunk)
-                          bars.push(max)
-                        }
-                        return bars.map((amp, i) => (
-                          <div key={i} className={styles.wb} style={{ height: `${Math.max(2, amp * 100)}%`, background: color, opacity: 0.5 }} />
-                        ))
-                      })()}
-                    </div>
-                  ) : isAudio ? (
-                    <div className={styles.waveBars}>
-                      {Array.from({ length: 200 }, (_, i) => (
-                        <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.3 }} />
-                      ))}
+                  {isAudio ? (
+                    <div className={styles.trackAudioStack}>
+                      <div className={styles.trackWaveSection}>
+                        {waveformData ? (
+                          <div className={styles.waveBars}>
+                            {(() => {
+                              const targetBars = 300
+                              const step = Math.max(1, Math.floor(waveformData.length / targetBars))
+                              const bars: number[] = []
+                              for (let i = 0; i < waveformData.length; i += step) {
+                                const chunk = waveformData.slice(i, i + step)
+                                const max = Math.max(...chunk)
+                                bars.push(max)
+                              }
+                              return bars.map((amp, i) => (
+                                <div key={i} className={styles.wb} style={{ height: `${Math.max(2, amp * 100)}%`, background: color, opacity: 0.5 }} />
+                              ))
+                            })()}
+                          </div>
+                        ) : (
+                          <div className={styles.waveBars}>
+                            {Array.from({ length: 200 }, (_, i) => (
+                              <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.3 }} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {transcript && durationSec > 0 && (
+                        <div className={styles.trackWordsSection}>
+                          <div className={styles.trackWords}>
+                            {transcript.words.map((word, wi) => {
+                              const left = (word.start / durationSec) * 100
+                              const width = Math.max(0.2, ((word.end - word.start) / durationSec) * 100)
+                              const isCutWord = editor.isCut(word.start * 1000, word.end * 1000)
+                              return (
+                                <span
+                                  key={wi}
+                                  className={`${styles.trackWord} ${word.filler ? styles.trackWordFiller : ''} ${isCutWord ? styles.trackWordCut : ''}`}
+                                  style={{ left: `${left}%`, width: `${width}%` }}
+                                  title={word.word}
+                                >
+                                  {width > 1 ? word.word : ''}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <span className={styles.clipLabel}>{name} · {track.codec}</span>
@@ -1809,6 +1849,123 @@ export default function Editor() {
           </button>
         </div>
       )}
+
+      {/* ═══ OVERLAY CONTEXT MENU ═══ */}
+      {overlayCtxMenu && (() => {
+        const ov = overlays.find(o => o.id === overlayCtxMenu.overlayId)
+        if (!ov) return null
+        const videoTrackList = tracks.filter(t => t.type === 'video')
+        const updateOv = (patch: Partial<OverlayItem>) => setOverlays(prev => prev.map(o => o.id === ov.id ? { ...o, ...patch } : o))
+        return (
+          <div className={`${styles.ctxMenu} ${styles.ctxMenuOpen} ${styles.overlayCtxMenu}`} style={{ left: overlayCtxMenu.x, top: overlayCtxMenu.y }}>
+            <div className={styles.ctxHeader}>{ov.label || ov.type}</div>
+            <div className={styles.ctxDivider} />
+
+            {/* Video source — PiP only */}
+            {ov.type === 'pip' && videoTrackList.length > 0 && (
+              <>
+                <div className={styles.ctxHeader}>Video Source</div>
+                <button className={`${styles.ctxItem} ${ov.videoTrackIndex == null ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ videoTrackIndex: undefined }); setOverlayCtxMenu(null) }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                  None (placeholder)
+                </button>
+                {videoTrackList.map((t, i) => (
+                  <button key={t.index} className={`${styles.ctxItem} ${ov.videoTrackIndex === t.index ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ videoTrackIndex: t.index }); setOverlayCtxMenu(null) }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                    {t.label || `Video ${i + 1}`}{t.width ? ` (${t.width}x${t.height})` : ''}
+                  </button>
+                ))}
+                <div className={styles.ctxDivider} />
+              </>
+            )}
+
+            {/* Shape — PiP only */}
+            {ov.type === 'pip' && (
+              <>
+                <div className={styles.ctxHeader}>Shape</div>
+                <button className={`${styles.ctxItem} ${ov.borderRadius === 50 ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ borderRadius: 50, shape: 'circle' }); setOverlayCtxMenu(null) }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
+                  Circle
+                </button>
+                <button className={`${styles.ctxItem} ${ov.borderRadius === 16 ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ borderRadius: 16, shape: 'rounded' }); setOverlayCtxMenu(null) }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+                  Rounded
+                </button>
+                <button className={`${styles.ctxItem} ${ov.borderRadius === 0 ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ borderRadius: 0, shape: 'square' }); setOverlayCtxMenu(null) }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
+                  Square
+                </button>
+                <div className={styles.ctxDivider} />
+              </>
+            )}
+
+            {/* Size presets */}
+            <div className={styles.ctxHeader}>Size</div>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ size: { w: 15, h: 22 } }); setOverlayCtxMenu(null) }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="12" height="16" rx="1"/></svg>
+              Small
+            </button>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ size: { w: 20, h: 30 } }); setOverlayCtxMenu(null) }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="18" rx="1"/></svg>
+              Medium
+            </button>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ size: { w: 30, h: 42 } }); setOverlayCtxMenu(null) }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="1"/></svg>
+              Large
+            </button>
+            <div className={styles.ctxDivider} />
+
+            {/* Position presets */}
+            <div className={styles.ctxHeader}>Position</div>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 2, y: 2 } }); setOverlayCtxMenu(null) }}>Top Left</button>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 98 - ov.size.w, y: 2 } }); setOverlayCtxMenu(null) }}>Top Right</button>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 2, y: 98 - ov.size.h } }); setOverlayCtxMenu(null) }}>Bottom Left</button>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 98 - ov.size.w, y: 98 - ov.size.h } }); setOverlayCtxMenu(null) }}>Bottom Right</button>
+            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 50 - ov.size.w / 2, y: 50 - ov.size.h / 2 } }); setOverlayCtxMenu(null) }}>Center</button>
+            <div className={styles.ctxDivider} />
+
+            {/* Opacity quick picks */}
+            <div className={styles.ctxHeader}>Opacity</div>
+            <div className={styles.ctxInlineRow}>
+              {[100, 75, 50, 25].map(pct => (
+                <button key={pct} className={`${styles.ctxInlineBtn} ${Math.round((ov.opacity ?? 1) * 100) === pct ? styles.ctxInlineBtnActive : ''}`} onClick={() => { updateOv({ opacity: pct / 100 }); setOverlayCtxMenu(null) }}>{pct}%</button>
+              ))}
+            </div>
+            <div className={styles.ctxDivider} />
+
+            {/* Visibility toggle */}
+            <button className={styles.ctxItem} onClick={() => { updateOv({ visible: !ov.visible }); setOverlayCtxMenu(null) }}>
+              {ov.visible ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              )}
+              {ov.visible ? 'Hide' : 'Show'}
+            </button>
+
+            {/* Duplicate */}
+            <button className={styles.ctxItem} onClick={() => {
+              const dup = { ...ov, id: `${ov.type}-${Date.now()}`, position: { x: ov.position.x + 3, y: ov.position.y + 3 }, label: `${ov.label || ov.type} copy` }
+              setOverlays(prev => [...prev, dup])
+              setSelectedOverlayId(dup.id)
+              setOverlayCtxMenu(null)
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Duplicate
+            </button>
+
+            {/* Delete */}
+            <button className={`${styles.ctxItem} ${styles.ctxItemDanger}`} onClick={() => {
+              setOverlays(prev => prev.filter(o => o.id !== ov.id))
+              if (selectedOverlayId === ov.id) setSelectedOverlayId(null)
+              setOverlayCtxMenu(null)
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Delete <span className={styles.ctxShortcut}>{'\u232B'}</span>
+            </button>
+          </div>
+        )
+      })()}
 
       {/* ═══ COMMAND PALETTE ═══ */}
       <div className={`${styles.cmdOverlay} ${cmdOpen ? styles.cmdOverlayOpen : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setCmdOpen(false) }}>

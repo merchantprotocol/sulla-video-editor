@@ -8,6 +8,7 @@
 /* PiP camera bubble */
 .pip { width: 100%; height: 100%; border-style: solid; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #1a1d21; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
 .pip svg { color: #666; }
+.pipVideo { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
 /* Caption box */
 .captionBox { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px 12px; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

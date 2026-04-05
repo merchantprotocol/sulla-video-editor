@@ -152,6 +152,8 @@
 .videoPlaceholder { color: #666; font-size: 11px; text-align: center; }
 .videoPlaceholder svg { display: block; margin: 0 auto 6px; opacity: 0.3; }
 .videoPlayer { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+.overlayCanvas { position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: none; }
+.overlayCanvas > * { pointer-events: auto; }
 
 .videoControls { display: flex; align-items: center; gap: 8px; padding: 10px 0 0; }
 .playBtn { width: 32px; height: 32px; background: var(--accent); border: none; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.12s; flex-shrink: 0; }
@@ -297,6 +299,7 @@
 /* Track rows */
 .trackRows { flex: 1; overflow-y: auto; flex-shrink: 0; }
 .trackRow { display: flex; align-items: center; height: 38px; border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
+.trackRowWithTranscript { height: 56px; }
 .trackRow:hover { background: rgba(0,0,0,0.015); }
 .trackRowSelected { background: var(--accent-soft); }
 .trackRowMuted { opacity: 0.35; }
@@ -313,6 +316,9 @@
 
 .trackContent { flex: 1; height: 100%; position: relative; overflow: hidden; }
 .trackClip { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; display: flex; align-items: center; overflow: hidden; }
+.trackAudioStack { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.trackWaveSection { flex: 1; min-height: 0; overflow: hidden; }
+.trackWordsSection { height: 18px; flex-shrink: 0; overflow: hidden; border-top: 1px solid var(--border); }
 .videoClip { background: rgba(58,127,158,0.12); border: 1px solid rgba(58,127,158,0.25); }
 .cameraClip { background: rgba(120,90,220,0.1); border: 1px solid rgba(120,90,220,0.25); }
 .micClip { background: rgba(26,127,55,0.1); border: 1px solid rgba(26,127,55,0.25); }
@@ -324,7 +330,7 @@
 
 /* Transcript words on audio track (Descript-style) */
 .trackWords { position: relative; width: 100%; height: 100%; overflow: hidden; }
-.trackWord { position: absolute; top: 3px; bottom: 3px; background: rgba(26,127,55,0.15); border-radius: 2px; font-size: 8px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 1px; border-left: 1px solid rgba(26,127,55,0.25); transition: opacity 0.12s; cursor: default; }
+.trackWord { position: absolute; top: 1px; bottom: 1px; background: rgba(26,127,55,0.15); border-radius: 2px; font-size: 7px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 1px; border-left: 1px solid rgba(26,127,55,0.25); transition: opacity 0.12s; cursor: default; }
 .trackWord:hover { background: rgba(26,127,55,0.25); color: var(--text-secondary); z-index: 2; }
 .trackWordFiller { background: rgba(207,34,46,0.1); border-left-color: rgba(207,34,46,0.3); color: var(--red); opacity: 0.6; }
 .trackWordCut { opacity: 0.1; background: transparent; text-decoration: line-through; }
@@ -372,6 +378,13 @@
 .ctxItem svg { width: 14px; height: 14px; flex-shrink: 0; }
 .ctxDivider { height: 1px; background: var(--border); margin: 4px 0; }
 .ctxHeader { padding: 6px 12px 2px; font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.ctxItemActive { color: var(--accent); font-weight: 600; }
+.ctxItemActive:hover { color: var(--accent); }
+.ctxInlineRow { display: flex; gap: 2px; padding: 4px 8px; }
+.ctxInlineBtn { flex: 1; padding: 4px 0; font-size: 11px; text-align: center; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--text-secondary); cursor: pointer; font-family: var(--mono); transition: all 0.08s; }
+.ctxInlineBtn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--text-primary); }
+.ctxInlineBtnActive { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.overlayCtxMenu { max-height: 80vh; overflow-y: auto; }
 .trackCtxMenu { min-width: 220px; }
 
 /* ═══ UNDO TOAST ═══ */

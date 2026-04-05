@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulla Studio - Variation 5: Matched to Editor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #f6f8fa; --bg-surface: #ffffff; --bg-panel: #f0f2f5; --bg-hover: #e8ebef;
+    --border: #e8ebef; --border-hover: #d1d9e0; --border-visible: #d1d9e0;
+    --text: #1f2328; --text-secondary: #59636e; --text-dim: #b1bac4; --text-muted: #8b949e;
+    --accent: #3a7f9e; --accent-soft: rgba(58,127,158,0.08); --accent-hover: #2d6a85;
+    --green: #1a7f37; --green-soft: rgba(26,127,55,0.06);
+    --red: #cf222e; --red-soft: rgba(207,34,46,0.06);
+    --orange: #9a6700; --pink: #cf222e; --blue: #3a7f9e; --purple: #7c3aed;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', monospace;
+    --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 40px rgba(0,0,0,0.08);
+  }
+
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+  /* ─── Layout ─── */
+  .app { display: grid; grid-template-rows: 48px 1fr; grid-template-columns: 280px 1fr 320px; height: 100vh; }
+
+  /* ─── Top Bar (matched to editor) ─── */
+  .topbar { grid-column: 1 / -1; display: flex; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface); gap: 16px; z-index: 10; height: 48px; }
+  .logo { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .breadcrumb { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .breadcrumb span { color: var(--text-dim); }
+  .breadcrumb strong { color: var(--text-secondary); font-weight: 500; }
+  .editable-title { cursor: pointer; padding: 2px 6px; border-radius: 3px; transition: background 0.12s; font-weight: 500; color: var(--text-secondary); }
+  .editable-title:hover { background: var(--accent-soft); }
+  .topbar-spacer { flex: 1; }
+  .saved-badge { font-size: 11px; font-family: var(--mono); color: var(--green); font-weight: 600; padding: 2px 8px; background: var(--green-soft); border-radius: 10px; }
+  .topbar-btn { padding: 6px 14px; background: var(--accent); border: none; border-radius: 6px; color: white; font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.12s; }
+  .topbar-btn:hover { background: var(--accent-hover); }
+  .topbar-btn svg { width: 14px; height: 14px; }
+  .topbar-btn-secondary { background: none; border: 1px solid var(--border-visible); color: var(--text-secondary); }
+  .topbar-btn-secondary:hover { border-color: var(--border-hover); background: var(--bg-panel); }
+  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--purple)); border: none; color: white; font-family: var(--sans); font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
+  .user-avatar:hover { transform: scale(1.05); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+  /* ─── Left Panel (from V1) ─── */
+  .left-panel { background: var(--bg-surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+  .left-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 8px; flex-shrink: 0; }
+  .left-tab { padding: 12px 14px; font-size: 12px; font-weight: 600; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .left-tab:hover { color: var(--text-secondary); }
+  .left-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel-search { padding: 12px; flex-shrink: 0; }
+  .search-input { width: 100%; padding: 8px 12px 8px 34px; border-radius: 8px; border: 1px solid var(--border); font-size: 12px; background: var(--bg-panel); outline: none; transition: all 0.15s; font-family: inherit; }
+  .search-input:focus { border-color: var(--accent); background: var(--bg-surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search-wrap { position: relative; }
+  .search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-dim); }
+
+  .panel-section { padding: 0 12px 16px; }
+  .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 10px; padding: 0 4px; }
+
+  .element-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .element-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; cursor: grab; transition: all 0.15s; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .element-card:hover { border-color: var(--accent); background: var(--accent-soft); box-shadow: var(--shadow); transform: translateY(-1px); }
+  .element-card:active { cursor: grabbing; transform: scale(0.97); }
+  .element-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .element-icon svg { width: 20px; height: 20px; }
+  .element-card-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+
+  .icon-video { background: rgba(58,127,158,0.1); color: var(--accent); }
+  .icon-text { background: rgba(26,127,55,0.1); color: var(--green); }
+  .icon-shape { background: rgba(154,103,0,0.1); color: var(--orange); }
+  .icon-media { background: rgba(124,58,237,0.1); color: var(--purple); }
+  .icon-effect { background: rgba(58,127,158,0.1); color: var(--accent); }
+
+  /* ─── Canvas area (from V1) ─── */
+  .canvas-area { background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .canvas-wrap { position: relative; width: 640px; height: 360px; background: #0f0f0f; border-radius: 8px; box-shadow: var(--shadow-lg); overflow: hidden; }
+  .canvas-video { width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.2); font-size: 14px; }
+
+  .canvas-obj { position: absolute; cursor: move; }
+  .canvas-obj.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .canvas-obj .handle { position: absolute; width: 8px; height: 8px; background: white; border: 2px solid var(--accent); border-radius: 50%; }
+  .handle-tl { top: -4px; left: -4px; cursor: nw-resize; }
+  .handle-tr { top: -4px; right: -4px; cursor: ne-resize; }
+  .handle-bl { bottom: -4px; left: -4px; cursor: sw-resize; }
+  .handle-br { bottom: -4px; right: -4px; cursor: se-resize; }
+
+  .pip-obj { width: 120px; height: 120px; border-radius: 50%; border: 3px solid #3a7f9e; overflow: hidden; right: 24px; bottom: 24px; }
+  .pip-inner { width: 100%; height: 100%; background: linear-gradient(135deg, #4a1a6b, #2d1b69); display: flex; align-items: center; justify-content: center; }
+  .pip-inner svg { width: 32px; height: 32px; color: rgba(255,255,255,0.4); }
+
+  .caption-obj { bottom: 28px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 20px; border-radius: 8px; color: white; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  .caption-word { display: inline; }
+  .caption-word.highlight { color: #5096b3; background: rgba(80,150,179,0.2); border-radius: 3px; padding: 0 2px; }
+
+  .logo-obj { top: 16px; right: 16px; width: 48px; height: 48px; border-radius: 10px; background: rgba(255,255,255,0.1); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.15); }
+  .logo-obj svg { width: 24px; height: 24px; color: rgba(255,255,255,0.7); }
+
+  .lower-third-obj { bottom: 60px; left: 24px; background: rgba(255,255,255,0.95); border-radius: 10px; padding: 10px 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .lt-name { font-size: 13px; font-weight: 700; color: #171717; }
+  .lt-title { font-size: 10px; color: #737373; font-weight: 500; }
+  .lt-accent { width: 3px; height: 100%; background: var(--accent); border-radius: 2px; position: absolute; left: 0; top: 0; }
+
+  .aspect-pills { display: flex; gap: 4px; position: absolute; top: 16px; left: 50%; transform: translateX(-50%); background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; box-shadow: var(--shadow); z-index: 5; }
+  .aspect-pill { padding: 5px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; background: none; cursor: pointer; color: var(--text-dim); transition: all 0.12s; }
+  .aspect-pill:hover { color: var(--text); }
+  .aspect-pill.active { background: var(--accent); color: white; }
+
+  .canvas-toolbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: var(--shadow-lg); z-index: 5; }
+  .canvas-toolbar button { width: 36px; height: 32px; border: none; background: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.1s; }
+  .canvas-toolbar button:hover { background: var(--bg-panel); color: var(--text); }
+  .canvas-toolbar .sep { width: 1px; background: var(--border); margin: 4px 2px; }
+  .zoom-label { font-size: 11px; font-weight: 600; color: var(--text-dim); display: flex; align-items: center; padding: 0 8px; }
+
+  .timeline-strip { width: 640px; margin-top: 16px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+  .timeline-play { width: 28px; height: 28px; border-radius: 50%; border: none; background: var(--accent); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .timeline-play svg { width: 12px; height: 12px; }
+  .timeline-track { flex: 1; height: 28px; background: var(--bg-panel); border-radius: 6px; position: relative; overflow: hidden; }
+  .timeline-wave { position: absolute; inset: 0; display: flex; align-items: center; gap: 1px; padding: 4px; }
+  .timeline-bar { width: 2px; border-radius: 1px; background: var(--accent); opacity: 0.3; flex-shrink: 0; }
+  .timeline-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); left: 35%; z-index: 2; }
+  .timeline-playhead::before { content: ''; position: absolute; top: -3px; left: -4px; width: 10px; height: 6px; background: var(--accent); border-radius: 2px; }
+  .timeline-time { font-size: 11px; font-weight: 600; color: var(--text-dim); font-family: 'SF Mono', monospace; width: 80px; text-align: right; flex-shrink: 0; }
+
+  /* ─── Right Panel (from V3 — CapCut style) ─── */
+  .right-panel { background: var(--bg-surface); border-left: 1px solid var(--border); overflow-y: auto; }
+  .rp-tab-bar { display: flex; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg-surface); z-index: 2; }
+  .rp-tab { flex: 1; padding: 10px; font-size: 11px; font-weight: 600; text-align: center; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.12s; }
+  .rp-tab:hover { color: var(--text-secondary); }
+  .rp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .rp-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .rp-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+  .rp-section-title button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; }
+  .rp-section-title button:hover { color: var(--accent); }
+
+  .rp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .rp-label { font-size: 11px; font-weight: 500; color: var(--text-secondary); width: 56px; flex-shrink: 0; }
+  .rp-input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; background: var(--bg-panel); outline: none; transition: all 0.12s; }
+  .rp-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .rp-input-sm { width: 52px; flex: none; text-align: center; }
+  .rp-select { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; background: var(--bg-panel); outline: none; appearance: none; cursor: pointer; }
+  .rp-slider { flex: 1; height: 4px; accent-color: var(--accent); cursor: pointer; }
+  .rp-slider-val { font-size: 11px; font-weight: 600; color: var(--text-dim); width: 36px; text-align: right; font-family: 'SF Mono', monospace; }
+  .rp-swatch { width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--border); cursor: pointer; flex-shrink: 0; }
+
+  /* Quick actions (V3) */
+  .quick-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .qa-btn { display: flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; background: none; font-size: 11px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.12s; font-family: inherit; }
+  .qa-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .qa-btn svg { width: 12px; height: 12px; }
+
+  /* Preset grid (V3) */
+  .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .preset-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.12s; }
+  .preset-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow); }
+  .preset-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .preset-thumb { height: 48px; display: flex; align-items: center; justify-content: center; }
+  .preset-label { padding: 5px; font-size: 9px; font-weight: 600; text-align: center; color: var(--text-secondary); background: var(--bg-panel); }
+
+  /* Caption presets (V3) */
+  .cap-preset { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.12s; margin-bottom: 6px; }
+  .cap-preset:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .cap-preset.active { border-color: var(--accent); background: var(--accent-soft); }
+  .cap-preview { display: flex; gap: 2px; }
+  .cap-preview-word { padding: 2px 4px; font-size: 10px; font-weight: 700; border-radius: 3px; }
+  .cap-preset-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-left: auto; }
+
+  /* Position picker (V3) */
+  .pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: 72px; }
+  .pos-cell { width: 22px; height: 16px; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; background: none; transition: all 0.08s; }
+  .pos-cell:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .pos-cell.active { background: var(--accent); border-color: var(--accent); }
+
+  /* Scene strip — centered below video */
+  .scene-strip { width: 640px; margin-top: 12px; display: flex; flex-direction: column; }
+  .scene-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .scene-header-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+  .scene-header-spacer { flex: 1; }
+  .scene-add { width: 22px; height: 22px; border-radius: 6px; border: 1px dashed var(--border); background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-dim); transition: all 0.1s; }
+  .scene-add:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .scene-add svg { width: 12px; height: 12px; }
+  .scene-scroll { display: flex; gap: 8px; overflow-x: auto; align-items: flex-start; padding-bottom: 4px; }
+  .scene-card { width: 120px; flex-shrink: 0; border-radius: 8px; border: 2px solid transparent; overflow: hidden; cursor: pointer; transition: all 0.12s; background: var(--bg-surface); box-shadow: var(--shadow); }
+  .scene-card:hover { border-color: var(--border-hover); transform: translateY(-1px); }
+  .scene-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .scene-thumb { width: 100%; height: 48px; background: #1a1a2e; display: flex; align-items: center; justify-content: center; position: relative; }
+  .scene-thumb svg { width: 14px; height: 14px; color: rgba(255,255,255,0.15); }
+  .scene-thumb-time { position: absolute; bottom: 3px; right: 4px; font-size: 8px; font-weight: 600; color: rgba(255,255,255,0.5); background: rgba(0,0,0,0.5); padding: 1px 4px; border-radius: 3px; }
+  .scene-meta { padding: 5px 6px; }
+  .scene-name { font-size: 10px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scene-layers { font-size: 9px; color: var(--text-dim); margin-top: 1px; }
+
+  /* Tab panel switching */
+  .tab-content { display: none; flex-direction: column; flex: 1; overflow-y: auto; }
+  .tab-content.active { display: flex; }
+
+  /* Template cards */
+  .template-grid { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 0 12px 16px; }
+  .template-card { position: relative; border-radius: 8px; border: 1px solid var(--border); overflow: hidden; cursor: pointer; transition: all 0.15s; }
+  .template-card:hover { border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-1px); }
+  .template-thumb { width: 100%; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; position: relative; }
+  .template-thumb svg { color: rgba(255,255,255,0.15); width: 24px; height: 24px; }
+  .template-info { padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .template-info-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+  .template-info-meta { font-size: 10px; color: var(--text-dim); }
+  .template-badge { position: absolute; top: 6px; left: 6px; padding: 2px 6px; font-size: 9px; font-weight: 700; border-radius: 4px; text-transform: uppercase; color: white; }
+  .badge-free { background: var(--green); }
+  .badge-pro { background: var(--accent); }
+  .badge-new { background: var(--purple); }
+
+  /* Upload area */
+  .upload-zone { margin: 0 12px 16px; border: 2px dashed var(--border); border-radius: 10px; padding: 28px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all 0.15s; }
+  .upload-zone:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .upload-zone svg { width: 28px; height: 28px; color: var(--text-dim); }
+  .upload-zone-text { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .upload-zone-hint { font-size: 10px; color: var(--text-dim); }
+  .upload-list { padding: 0 12px; }
+  .upload-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; transition: all 0.12s; cursor: pointer; }
+  .upload-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .upload-item-thumb { width: 40px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .upload-item-thumb svg { width: 14px; height: 14px; }
+  .upload-item-name { font-size: 11px; font-weight: 600; color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .upload-item-size { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+
+  /* Animation presets grid */
+  .anim-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .anim-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.12s; text-align: center; }
+  .anim-card:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+  .anim-card.active { border-color: var(--accent); background: var(--accent-soft); }
+  .anim-card svg { width: 20px; height: 20px; color: var(--text-dim); margin-bottom: 4px; }
+  .anim-card-label { font-size: 10px; font-weight: 600; color: var(--text-secondary); }
+  .anim-card:hover svg, .anim-card.active svg { color: var(--accent); }
+
+  /* Easing curve preview */
+  .easing-row { display: flex; gap: 4px; }
+  .easing-btn { flex: 1; padding: 6px 4px; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; text-align: center; font-size: 10px; font-weight: 600; color: var(--text-dim); transition: all 0.1s; font-family: inherit; }
+  .easing-btn:hover { border-color: var(--accent); color: var(--text-secondary); }
+  .easing-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+  /* Layout — alignment, distribution, grid */
+  .align-grid { display: flex; gap: 2px; }
+  .align-btn { width: 32px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-dim); transition: all 0.08s; }
+  .align-btn:hover { background: var(--bg-panel); color: var(--text); border-color: var(--border-hover); }
+  .align-btn svg { width: 14px; height: 14px; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+  .toggle-label { font-size: 12px; color: var(--text-secondary); }
+  .toggle-track { width: 32px; height: 18px; border-radius: 9px; background: var(--bg-hover); border: 1px solid var(--border); position: relative; cursor: pointer; transition: all 0.15s; }
+  .toggle-track.on { background: var(--accent); border-color: var(--accent); }
+  .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: white; transition: all 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .toggle-track.on .toggle-thumb { left: 16px; }
+
+  .grid-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .grid-preset { height: 36px; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-dim); transition: all 0.1s; }
+  .grid-preset:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .grid-preset.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .grid-preset svg { width: 18px; height: 18px; }
+
+  /* Badge */
+  .design-badge { position: fixed; bottom: 12px; right: 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 10px; font-weight: 600; color: var(--text-dim); z-index: 100; box-shadow: var(--shadow); }
+  .design-badge strong { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ═══ TOP BAR (matched to editor) ═══ -->
+  <div class="topbar">
+    <a class="logo" href="#">sulla</a>
+    <div class="breadcrumb">
+      <span>/</span>
+      <strong class="editable-title">Screencast Template v2</strong>
+    </div>
+    <div class="topbar-spacer"></div>
+    <span class="saved-badge">Saved</span>
+    <button class="topbar-btn topbar-btn-secondary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      Preview
+    </button>
+    <button class="topbar-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+    <button class="user-avatar">JB</button>
+  </div>
+
+  <!-- ═══ LEFT PANEL ═══ -->
+  <div class="left-panel">
+    <div class="left-tabs" id="leftTabs">
+      <div class="left-tab active" data-tab="elements">Elements</div>
+      <div class="left-tab" data-tab="templates">Templates</div>
+      <div class="left-tab" data-tab="projects">Projects</div>
+    </div>
+
+    <!-- ELEMENTS TAB -->
+    <div class="tab-content active" id="left-elements">
+      <div class="panel-search">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" placeholder="Search elements..." />
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="section-label">Video Layers</div>
+        <div class="element-grid">
+          <div class="element-card"><div class="element-icon icon-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div><div class="element-card-label">PiP Camera</div></div>
+          <div class="element-card"><div class="element-icon icon-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><div class="element-card-label">Screen</div></div>
+          <div class="element-card"><div class="element-icon icon-media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div><div class="element-card-label">Image</div></div>
+          <div class="element-card"><div class="element-icon icon-media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div><div class="element-card-label">B-Roll</div></div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="section-label">Text & Titles</div>
+        <div class="element-grid">
+          <div class="element-card"><div class="element-icon icon-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg></div><div class="element-card-label">Heading</div></div>
+          <div class="element-card"><div class="element-icon icon-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></div><div class="element-card-label">Body Text</div></div>
+          <div class="element-card"><div class="element-icon icon-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg></div><div class="element-card-label">Caption</div></div>
+          <div class="element-card"><div class="element-icon icon-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2H3v16h5v4l4-4h9V2z"/></svg></div><div class="element-card-label">Lower Third</div></div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="section-label">Shapes & Graphics</div>
+        <div class="element-grid">
+          <div class="element-card"><div class="element-icon icon-shape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div><div class="element-card-label">Rectangle</div></div>
+          <div class="element-card"><div class="element-icon icon-shape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg></div><div class="element-card-label">Circle</div></div>
+          <div class="element-card"><div class="element-icon icon-shape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div class="element-card-label">Divider</div></div>
+          <div class="element-card"><div class="element-icon icon-shape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="element-card-label">Badge</div></div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="section-label">Effects & Animations</div>
+        <div class="element-grid">
+          <div class="element-card"><div class="element-icon icon-effect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><div class="element-card-label">Entrance</div></div>
+          <div class="element-card"><div class="element-icon icon-effect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4"/></svg></div><div class="element-card-label">Motion</div></div>
+          <div class="element-card"><div class="element-icon icon-effect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M8 7l4-4 4 4"/></svg></div><div class="element-card-label">Zoom</div></div>
+          <div class="element-card"><div class="element-icon icon-effect"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg></div><div class="element-card-label">Transition</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEMPLATES TAB -->
+    <div class="tab-content" id="left-templates">
+      <div class="panel-search">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" placeholder="Search templates..." />
+        </div>
+      </div>
+      <div class="panel-section"><div class="section-label">Screencast</div></div>
+      <div class="template-grid">
+        <div class="template-card">
+          <div class="template-thumb" style="background:linear-gradient(135deg,#1a1a2e,#16213e);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><circle cx="18" cy="14" r="3"/></svg><span class="template-badge badge-free">Free</span></div>
+          <div class="template-info"><span class="template-info-name">Clean Screencast</span><span class="template-info-meta">16:9</span></div>
+        </div>
+        <div class="template-card">
+          <div class="template-thumb" style="background:linear-gradient(135deg,#0d1117,#1a2332);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="14" y="11" width="7" height="7" rx="3"/></svg><span class="template-badge badge-free">Free</span></div>
+          <div class="template-info"><span class="template-info-name">PiP + Captions</span><span class="template-info-meta">16:9</span></div>
+        </div>
+        <div class="template-card">
+          <div class="template-thumb" style="background:linear-gradient(135deg,#1a0a2e,#2d1b69);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="template-badge badge-pro">Pro</span></div>
+          <div class="template-info"><span class="template-info-name">Podcast Vertical</span><span class="template-info-meta">9:16</span></div>
+        </div>
+      </div>
+      <div class="panel-section"><div class="section-label">Social</div></div>
+      <div class="template-grid">
+        <div class="template-card">
+          <div class="template-thumb" style="background:linear-gradient(135deg,#0e1a0e,#1a2e1a);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="4" y="2" width="16" height="20" rx="2"/></svg><span class="template-badge badge-new">New</span></div>
+          <div class="template-info"><span class="template-info-name">TikTok Story</span><span class="template-info-meta">9:16</span></div>
+        </div>
+        <div class="template-card">
+          <div class="template-thumb" style="background:linear-gradient(135deg,#1a1a0e,#2e2e1a);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span class="template-badge badge-free">Free</span></div>
+          <div class="template-info"><span class="template-info-name">Instagram Square</span><span class="template-info-meta">1:1</span></div>
+        </div>
+        <div class="template-card">
+          <div class="template-thumb" style="background:linear-gradient(135deg,#1a0e0e,#2e1a1a);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="2" y="3" width="20" height="14" rx="2"/></svg><span class="template-badge badge-pro">Pro</span></div>
+          <div class="template-info"><span class="template-info-name">YouTube Intro</span><span class="template-info-meta">16:9</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROJECTS TAB -->
+    <div class="tab-content" id="left-projects">
+      <div class="panel-search">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" placeholder="Search projects..." />
+        </div>
+      </div>
+      <div class="panel-section"><div class="section-label">Recent Projects</div></div>
+      <div class="upload-list">
+        <div class="upload-item" style="border-color:var(--accent);background:var(--accent-soft);">
+          <div class="upload-item-thumb" style="background:linear-gradient(135deg,#111118,#1a1a2e);border-radius:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:rgba(255,255,255,0.4)"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div style="flex:1;min-width:0;">
+            <div class="upload-item-name" style="font-weight:700;">Screencast Template v2</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">4:12 &middot; 2 video, 1 audio</div>
+          </div>
+          <span style="font-size:9px;color:var(--accent);font-weight:600;">Current</span>
+        </div>
+        <div class="upload-item">
+          <div class="upload-item-thumb" style="background:linear-gradient(135deg,#1a1a2e,#0d1117);border-radius:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:rgba(255,255,255,0.4)"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div style="flex:1;min-width:0;">
+            <div class="upload-item-name">Product Demo Q1</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">6:45 &middot; 1 video, 2 audio</div>
+          </div>
+          <span class="upload-item-size">Mar 28</span>
+        </div>
+        <div class="upload-item">
+          <div class="upload-item-thumb" style="background:linear-gradient(135deg,#0e1a0e,#1a2e1a);border-radius:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:rgba(255,255,255,0.4)"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div style="flex:1;min-width:0;">
+            <div class="upload-item-name">Onboarding Walkthrough</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">3:22 &middot; 1 video, 1 audio</div>
+          </div>
+          <span class="upload-item-size">Mar 20</span>
+        </div>
+        <div class="upload-item">
+          <div class="upload-item-thumb" style="background:linear-gradient(135deg,#1a0e0e,#2e1a1a);border-radius:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:rgba(255,255,255,0.4)"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div style="flex:1;min-width:0;">
+            <div class="upload-item-name">Investor Pitch Recording</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">12:08 &middot; 2 video, 2 audio</div>
+          </div>
+          <span class="upload-item-size">Mar 15</span>
+        </div>
+        <div class="upload-item">
+          <div class="upload-item-thumb" style="background:linear-gradient(135deg,#0e0e1a,#1a1a2e);border-radius:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:rgba(255,255,255,0.4)"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div style="flex:1;min-width:0;">
+            <div class="upload-item-name">Feature Announcement</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">2:15 &middot; 1 video, 1 audio</div>
+          </div>
+          <span class="upload-item-size">Mar 8</span>
+        </div>
+        <div class="upload-item">
+          <div class="upload-item-thumb" style="background:linear-gradient(135deg,#1a1a0e,#2e2e1a);border-radius:4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:rgba(255,255,255,0.4)"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <div style="flex:1;min-width:0;">
+            <div class="upload-item-name">Team Standup Recap</div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">8:30 &middot; 1 video, 3 audio</div>
+          </div>
+          <span class="upload-item-size">Mar 1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CANVAS AREA (V1) ═══ -->
+  <div class="canvas-area">
+    <div class="aspect-pills">
+      <button class="aspect-pill active">16:9</button>
+      <button class="aspect-pill">9:16</button>
+      <button class="aspect-pill">1:1</button>
+      <button class="aspect-pill">4:5</button>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="canvas-video">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+      <div class="canvas-obj pip-obj selected">
+        <div class="pip-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="handle handle-tl"></div>
+        <div class="handle handle-tr"></div>
+        <div class="handle handle-bl"></div>
+        <div class="handle handle-br"></div>
+      </div>
+      <div class="canvas-obj caption-obj">
+        <span class="caption-word">Building </span>
+        <span class="caption-word highlight">amazing </span>
+        <span class="caption-word">products</span>
+      </div>
+      <div class="canvas-obj logo-obj">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </div>
+      <div class="canvas-obj lower-third-obj">
+        <div class="lt-accent"></div>
+        <div class="lt-name" style="padding-left: 8px;">Sarah Chen</div>
+        <div class="lt-title" style="padding-left: 8px;">Product Designer</div>
+      </div>
+    </div>
+
+    <div class="timeline-strip">
+      <button class="timeline-play">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <div class="timeline-track">
+        <div class="timeline-wave" id="wave1"></div>
+        <div class="timeline-playhead"></div>
+      </div>
+      <div class="timeline-time">1:24 / 4:12</div>
+    </div>
+
+    <!-- Scene strip -->
+    <div class="scene-strip">
+      <div class="scene-header">
+        <span class="scene-header-title">Scenes</span>
+        <div class="scene-header-spacer"></div>
+        <button class="scene-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
+      <div class="scene-scroll">
+        <div class="scene-card">
+          <div class="scene-thumb" style="background:linear-gradient(135deg,#1a1a2e,#0d1117);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="scene-thumb-time">0:00</span></div>
+          <div class="scene-meta"><div class="scene-name">Intro</div><div class="scene-layers">2 layers</div></div>
+        </div>
+        <div class="scene-card active">
+          <div class="scene-thumb" style="background:linear-gradient(135deg,#111118,#1a1a2e);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="scene-thumb-time">0:32</span></div>
+          <div class="scene-meta"><div class="scene-name">Main Content</div><div class="scene-layers">5 layers</div></div>
+        </div>
+        <div class="scene-card">
+          <div class="scene-thumb" style="background:linear-gradient(135deg,#0e1a0e,#1a2e1a);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="scene-thumb-time">2:48</span></div>
+          <div class="scene-meta"><div class="scene-name">Demo</div><div class="scene-layers">3 layers</div></div>
+        </div>
+        <div class="scene-card">
+          <div class="scene-thumb" style="background:linear-gradient(135deg,#1a0e0e,#2e1a1a);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="scene-thumb-time">3:30</span></div>
+          <div class="scene-meta"><div class="scene-name">CTA</div><div class="scene-layers">4 layers</div></div>
+        </div>
+        <div class="scene-card">
+          <div class="scene-thumb" style="background:linear-gradient(135deg,#0e0e1a,#1a1a2e);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="scene-thumb-time">3:58</span></div>
+          <div class="scene-meta"><div class="scene-name">Outro</div><div class="scene-layers">2 layers</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="canvas-toolbar">
+      <button title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg></button>
+      <button title="Hand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 0 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></button>
+      <div class="sep"></div>
+      <button title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+      <span class="zoom-label">100%</span>
+      <button title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+      <div class="sep"></div>
+      <button title="Grid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></button>
+      <button title="Guides"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></button>
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT PANEL ═══ -->
+  <div class="right-panel">
+    <div class="rp-tab-bar" id="rightTabs">
+      <div class="rp-tab active" data-tab="style">Style</div>
+      <div class="rp-tab" data-tab="animate">Animate</div>
+      <div class="rp-tab" data-tab="layout">Layout</div>
+    </div>
+
+    <!-- STYLE TAB -->
+    <div class="tab-content active" id="right-style">
+
+    <!-- Quick actions -->
+    <div class="rp-section">
+      <div class="rp-section-title">Quick Actions</div>
+      <div class="quick-actions">
+        <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Duplicate</button>
+        <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Lock</button>
+        <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg> Flip</button>
+        <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Delete</button>
+      </div>
+    </div>
+
+    <!-- Video source -->
+    <div class="rp-section">
+      <div class="rp-section-title">Video Source</div>
+      <div class="rp-row">
+        <select class="rp-select">
+          <option>Camera - Video 2 (1280x720)</option>
+          <option>Screen - Video 1 (1920x1080)</option>
+          <option>None (placeholder)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Shape presets -->
+    <div class="rp-section">
+      <div class="rp-section-title">Shape Presets</div>
+      <div class="preset-grid">
+        <div class="preset-card">
+          <div class="preset-thumb" style="background:#1a1a2e;"><div style="width:40px;height:40px;border-radius:50%;border:2px solid var(--accent);"></div></div>
+          <div class="preset-label">Circle</div>
+        </div>
+        <div class="preset-card active">
+          <div class="preset-thumb" style="background:#1a1a2e;"><div style="width:40px;height:40px;border-radius:8px;border:2px solid var(--accent);"></div></div>
+          <div class="preset-label">Rounded</div>
+        </div>
+        <div class="preset-card">
+          <div class="preset-thumb" style="background:#1a1a2e;"><div style="width:40px;height:40px;border:2px solid var(--accent);"></div></div>
+          <div class="preset-label">Square</div>
+        </div>
+        <div class="preset-card">
+          <div class="preset-thumb" style="background:#1a1a2e;"><div style="width:50px;height:32px;border-radius:16px;border:2px solid var(--accent);"></div></div>
+          <div class="preset-label">Pill</div>
+        </div>
+        <div class="preset-card">
+          <div class="preset-thumb" style="background:#1a1a2e;"><div style="width:40px;height:40px;border-radius:50%;border:3px solid white;box-shadow:0 0 12px rgba(255,255,255,0.3);"></div></div>
+          <div class="preset-label">Glow</div>
+        </div>
+        <div class="preset-card">
+          <div class="preset-thumb" style="background:#1a1a2e;"><div style="width:40px;height:40px;border-radius:50%;border:3px double var(--accent);"></div></div>
+          <div class="preset-label">Double</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Position & Size -->
+    <div class="rp-section">
+      <div class="rp-section-title">Position & Size</div>
+      <div class="rp-row">
+        <span class="rp-label">Position</span>
+        <div class="pos-grid">
+          <button class="pos-cell"></button><button class="pos-cell"></button><button class="pos-cell"></button>
+          <button class="pos-cell"></button><button class="pos-cell"></button><button class="pos-cell"></button>
+          <button class="pos-cell"></button><button class="pos-cell"></button><button class="pos-cell active"></button>
+        </div>
+        <div style="flex:1">
+          <div class="rp-row" style="margin-bottom:4px;"><span class="rp-label">X</span><input class="rp-input rp-input-sm" value="78%" /></div>
+          <div class="rp-row" style="margin-bottom:0;"><span class="rp-label">Y</span><input class="rp-input rp-input-sm" value="65%" /></div>
+        </div>
+      </div>
+      <div class="rp-row" style="margin-top:8px;">
+        <span class="rp-label">Size</span>
+        <input class="rp-input rp-input-sm" value="120" />
+        <span style="color:var(--text-dim);font-size:11px;">x</span>
+        <input class="rp-input rp-input-sm" value="120" />
+        <span style="color:var(--text-dim);font-size:11px;">px</span>
+      </div>
+    </div>
+
+    <!-- Border -->
+    <div class="rp-section">
+      <div class="rp-section-title">Border</div>
+      <div class="rp-row">
+        <span class="rp-label">Color</span>
+        <div class="rp-swatch" style="background: #3a7f9e;"></div>
+        <input class="rp-input" value="#3A7F9E" style="flex:1" />
+      </div>
+      <div class="rp-row">
+        <span class="rp-label">Width</span>
+        <input type="range" class="rp-slider" min="0" max="10" value="3" />
+        <span class="rp-slider-val">3px</span>
+      </div>
+    </div>
+
+    <!-- Shadow -->
+    <div class="rp-section">
+      <div class="rp-section-title">Shadow <button>+ Add</button></div>
+      <div class="rp-row">
+        <span class="rp-label">Blur</span>
+        <input type="range" class="rp-slider" min="0" max="60" value="24" />
+        <span class="rp-slider-val">24px</span>
+      </div>
+      <div class="rp-row">
+        <span class="rp-label">Color</span>
+        <div class="rp-swatch" style="background: rgba(58,127,158,0.25);"></div>
+        <input class="rp-input" value="rgba(58,127,158,0.25)" style="flex:1;font-size:10px;" />
+      </div>
+    </div>
+
+    <!-- Opacity -->
+    <div class="rp-section">
+      <div class="rp-section-title">Opacity & Blend</div>
+      <div class="rp-row">
+        <span class="rp-label">Opacity</span>
+        <input type="range" class="rp-slider" min="0" max="100" value="100" />
+        <span class="rp-slider-val">100%</span>
+      </div>
+      <div class="rp-row">
+        <span class="rp-label">Blend</span>
+        <select class="rp-select">
+          <option>Normal</option>
+          <option>Multiply</option>
+          <option>Screen</option>
+          <option>Overlay</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Caption style presets -->
+    <div class="rp-section">
+      <div class="rp-section-title">Caption Styles</div>
+      <div class="cap-preset active">
+        <div class="cap-preview">
+          <span class="cap-preview-word" style="color:white;background:var(--accent);">word</span>
+          <span class="cap-preview-word" style="color:white;">pop</span>
+        </div>
+        <span class="cap-preset-name">Pop Highlight</span>
+      </div>
+      <div class="cap-preset">
+        <div class="cap-preview">
+          <span class="cap-preview-word" style="color:white;text-decoration:underline;text-decoration-color:var(--accent);">word</span>
+        </div>
+        <span class="cap-preset-name">Underline</span>
+      </div>
+      <div class="cap-preset">
+        <div class="cap-preview">
+          <span class="cap-preview-word" style="color:#fbbf24;background:rgba(0,0,0,0.6);border-radius:3px;">word</span>
+        </div>
+        <span class="cap-preset-name">Karaoke</span>
+      </div>
+      <div class="cap-preset">
+        <div class="cap-preview">
+          <span class="cap-preview-word" style="color:white;background:rgba(0,0,0,0.8);border-radius:3px;padding:2px 6px;">word</span>
+        </div>
+        <span class="cap-preset-name">Classic Box</span>
+      </div>
+    </div>
+    </div><!-- /style tab -->
+
+    <!-- ANIMATE TAB -->
+    <div class="tab-content" id="right-animate">
+      <div class="rp-section">
+        <div class="rp-section-title">Entrance</div>
+        <div class="anim-grid">
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg><div class="anim-card-label">None</div></div>
+          <div class="anim-card active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.3"/><circle cx="12" cy="12" r="6"/></svg><div class="anim-card-label">Fade In</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg><div class="anim-card-label">Slide Up</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg><div class="anim-card-label">Slide Right</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><circle cx="10" cy="14" r="6" opacity="0.3"/></svg><div class="anim-card-label">Scale In</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/></svg><div class="anim-card-label">Bounce</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" opacity="0.3"/><path d="M12 3a9 9 0 0 1 0 18"/></svg><div class="anim-card-label">Spin In</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" opacity="0.3"/><path d="M8 12h8"/><path d="M12 8v8"/></svg><div class="anim-card-label">Pop</div></div>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Exit</div>
+        <div class="anim-grid">
+          <div class="anim-card active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg><div class="anim-card-label">None</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="10" opacity="0.3"/></svg><div class="anim-card-label">Fade Out</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg><div class="anim-card-label">Slide Down</div></div>
+          <div class="anim-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg><div class="anim-card-label">Scale Out</div></div>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Timing</div>
+        <div class="rp-row">
+          <span class="rp-label">Duration</span>
+          <input type="range" class="rp-slider" min="100" max="2000" value="300" />
+          <span class="rp-slider-val">0.3s</span>
+        </div>
+        <div class="rp-row">
+          <span class="rp-label">Delay</span>
+          <input type="range" class="rp-slider" min="0" max="2000" value="0" />
+          <span class="rp-slider-val">0s</span>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Easing</div>
+        <div class="easing-row">
+          <button class="easing-btn">Linear</button>
+          <button class="easing-btn active">Ease Out</button>
+          <button class="easing-btn">Ease In</button>
+          <button class="easing-btn">Spring</button>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Loop</div>
+        <div class="rp-row">
+          <span class="rp-label">Repeat</span>
+          <select class="rp-select">
+            <option>None</option>
+            <option>2x</option>
+            <option>3x</option>
+            <option>Infinite</option>
+          </select>
+        </div>
+        <div class="rp-row">
+          <span class="rp-label">Direction</span>
+          <select class="rp-select">
+            <option>Normal</option>
+            <option>Reverse</option>
+            <option>Alternate</option>
+          </select>
+        </div>
+      </div>
+    </div><!-- /animate tab -->
+
+    <!-- LAYOUT TAB -->
+    <div class="tab-content" id="right-layout">
+      <div class="rp-section">
+        <div class="rp-section-title">Alignment</div>
+        <div class="rp-row">
+          <span class="rp-label">Align</span>
+          <div class="align-grid">
+            <button class="align-btn" title="Left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="4" x2="4" y2="20"/><rect x="8" y="8" width="12" height="8" rx="1"/></svg></button>
+            <button class="align-btn" title="Center H"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="4" x2="12" y2="20"/><rect x="4" y="8" width="16" height="8" rx="1"/></svg></button>
+            <button class="align-btn" title="Right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="20" y1="4" x2="20" y2="20"/><rect x="4" y="8" width="12" height="8" rx="1"/></svg></button>
+            <button class="align-btn" title="Top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="4" x2="20" y2="4"/><rect x="8" y="8" width="8" height="12" rx="1"/></svg></button>
+            <button class="align-btn" title="Center V"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/><rect x="8" y="4" width="8" height="16" rx="1"/></svg></button>
+            <button class="align-btn" title="Bottom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="20"/><rect x="8" y="4" width="8" height="12" rx="1"/></svg></button>
+          </div>
+        </div>
+        <div class="rp-row">
+          <span class="rp-label">Distribute</span>
+          <div class="align-grid">
+            <button class="align-btn" title="Distribute H"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="4" height="12" rx="1"/><rect x="10" y="6" width="4" height="12" rx="1"/><rect x="19" y="6" width="4" height="12" rx="1"/></svg></button>
+            <button class="align-btn" title="Distribute V"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="1" width="12" height="4" rx="1"/><rect x="6" y="10" width="12" height="4" rx="1"/><rect x="6" y="19" width="12" height="4" rx="1"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Canvas Grid</div>
+        <div class="grid-presets">
+          <button class="grid-preset" title="None"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>
+          <button class="grid-preset active" title="Rule of Thirds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="1"/><line x1="8.67" y1="2" x2="8.67" y2="22"/><line x1="15.33" y1="2" x2="15.33" y2="22"/><line x1="2" y1="8.67" x2="22" y2="8.67"/><line x1="2" y1="15.33" x2="22" y2="15.33"/></svg></button>
+          <button class="grid-preset" title="Center Cross"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="1"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg></button>
+          <button class="grid-preset" title="Golden Ratio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="1"/><line x1="9" y1="2" x2="9" y2="22"/><line x1="15" y1="2" x2="15" y2="22"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="2" y1="15" x2="22" y2="15"/></svg></button>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Snapping</div>
+        <div class="toggle-row">
+          <span class="toggle-label">Snap to Grid</span>
+          <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+        </div>
+        <div class="toggle-row" style="margin-top:8px;">
+          <span class="toggle-label">Snap to Objects</span>
+          <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+        </div>
+        <div class="toggle-row" style="margin-top:8px;">
+          <span class="toggle-label">Smart Guides</span>
+          <div class="toggle-track on" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Safe Zones</div>
+        <div class="toggle-row">
+          <span class="toggle-label">Title Safe (80%)</span>
+          <div class="toggle-track" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+        </div>
+        <div class="toggle-row" style="margin-top:8px;">
+          <span class="toggle-label">Action Safe (90%)</span>
+          <div class="toggle-track" onclick="this.classList.toggle('on')"><div class="toggle-thumb"></div></div>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Spacing</div>
+        <div class="rp-row">
+          <span class="rp-label">Padding</span>
+          <input type="range" class="rp-slider" min="0" max="100" value="24" />
+          <span class="rp-slider-val">24px</span>
+        </div>
+        <div class="rp-row">
+          <span class="rp-label">Margin</span>
+          <input type="range" class="rp-slider" min="0" max="100" value="16" />
+          <span class="rp-slider-val">16px</span>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-section-title">Layer Order</div>
+        <div class="quick-actions">
+          <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg> To Front</button>
+          <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/></svg> Forward</button>
+          <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/></svg> Back</button>
+          <button class="qa-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 6 12 11 17 6"/><polyline points="7 13 12 18 17 13"/></svg> To Back</button>
+        </div>
+      </div>
+    </div><!-- /layout tab -->
+  </div>
+</div>
+
+<div class="design-badge">Variation 5 &mdash; <strong>Matched to existing editor</strong>: Same colors, fonts, and header as your Sulla editor</div>
+
+<script>
+  // Waveform
+  const wave = document.getElementById('wave1');
+  for (let i = 0; i < 200; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'timeline-bar';
+    bar.style.height = `${4 + Math.random() * 18}px`;
+    wave.appendChild(bar);
+  }
+
+  // Tab switching helper
+  function wireTabs(tabBarId, prefix) {
+    const bar = document.getElementById(tabBarId);
+    bar.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-tab]');
+      if (!tab) return;
+      // Update tab active state
+      bar.querySelectorAll('.left-tab, .rp-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      // Show matching content, hide others
+      const panel = bar.closest('.left-panel, .right-panel');
+      panel.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById(`${prefix}-${tab.dataset.tab}`).classList.add('active');
+    });
+  }
+
+  wireTabs('leftTabs', 'left');
+  wireTabs('rightTabs', 'right');
+</script>
+</body>
+</html>

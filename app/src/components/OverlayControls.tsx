@@ -1,6 +1,13 @@
 import { type OverlayItem, type OverlayType, createOverlay } from './VideoOverlays'
 import styles from './OverlayControls.module.css'
 
+export interface VideoTrackInfo {
+  index: number
+  label: string
+  width?: number
+  height?: number
+}
+
 interface Props {
   overlays: OverlayItem[]
   selectedId: string | null
@@ -8,6 +15,7 @@ interface Props {
   onAdd: (item: OverlayItem) => void
   onUpdate: (item: OverlayItem) => void
   onRemove: (id: string) => void
+  videoTracks?: VideoTrackInfo[]
 }
 
 const overlayTypes: { type: OverlayType; icon: JSX.Element; label: string }[] = [
@@ -25,7 +33,7 @@ const shapes: { id: string; label: string; radius: number }[] = [
   { id: 'square', label: 'Square', radius: 0 },
 ]
 
-export default function OverlayControls({ overlays, selectedId, onSelect, onAdd, onUpdate, onRemove }: Props) {
+export default function OverlayControls({ overlays, selectedId, onSelect, onAdd, onUpdate, onRemove, videoTracks = [] }: Props) {
   const selected = overlays.find(o => o.id === selectedId)
 
   return (
@@ -88,6 +96,25 @@ export default function OverlayControls({ overlays, selectedId, onSelect, onAdd,
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* PiP video source */}
+          {selected.type === 'pip' && videoTracks.length > 0 && (
+            <div className={styles.propRow}>
+              <span className={styles.propLabel}>Source</span>
+              <select
+                value={selected.videoTrackIndex ?? ''}
+                onChange={e => onUpdate({ ...selected, videoTrackIndex: e.target.value === '' ? undefined : Number(e.target.value) })}
+                className={styles.selectInput}
+              >
+                <option value="">None (placeholder)</option>
+                {videoTracks.map(t => (
+                  <option key={t.index} value={t.index}>
+                    {t.label}{t.width ? ` (${t.width}x${t.height})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

@@ -70,8 +70,8 @@
     {
       "type": "remove",
       "start_ms": 76170,
-      "end_ms": 76360,
-      "reason": "filler"
+      "end_ms": 78200,
+      "reason": "filler+cut:5 words"
     }
   ]
 }
