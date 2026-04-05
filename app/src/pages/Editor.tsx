@@ -150,7 +150,20 @@ export default function Editor() {
   }
 
   if (loading) return <div className={styles.app}><div className={styles.loading}>Loading project...</div></div>
-  if (!project) return <div className={styles.app}><div className={styles.loading}>Project not found. <Link to="/">Go home</Link></div></div>
+  if (!project) return (
+    <div className={styles.app}>
+      <div className={styles.loading}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="64" height="64"><rect x="2" y="2" width="20" height="20" rx="2"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Project not found</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>This project may have been deleted or the URL is incorrect.</div>
+          <Link to="/" style={{ padding: '10px 20px', background: 'var(--accent)', color: 'white', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>Go to Dashboard</Link>
+        </div>
+      </div>
+    </div>
+  )
 
   // Stats
   const fillerCount = transcript ? transcript.words.filter(w => w.filler && !editor.isCut(w.start * 1000, w.end * 1000)).length : 0
