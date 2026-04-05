@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/merchantprotocol/docker-nginx-node20-ffmpeg:latest
+    build: .
     restart: unless-stopped
     ports:
       - "${APP_PORT:-80}:80"
@@ -10,6 +10,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
+      - WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
       - WAZUH_MANAGER=${WAZUH_MANAGER:-}
       - WAZUH_AGENT_NAME=${WAZUH_AGENT_NAME:-}
     depends_on:
