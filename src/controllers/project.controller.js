@@ -1,4 +1,10 @@
+const path = require('path');
+const fs = require('fs/promises');
+const config = require('../utils/config');
 const ProjectService = require('../services/project.service');
+const ProjectRepository = require('../repositories/project.repository');
+const { writeCaptionFile } = require('../services/caption.service');
+const { NotFoundError } = require('../utils/errors');
 
 const ProjectController = {
   async list(req, res, next) {
@@ -125,6 +131,13 @@ const ProjectController = {
     } catch (err) { next(err); }
   },
 
+  async analyze(req, res, next) {
+    try {
+      const result = await ProjectService.analyze(req.params.id, req.userId);
+      res.json(result);
+    } catch (err) { next(err); }
+  },
+
   async getExports(req, res, next) {
     try {
       const exports = await ProjectService.getExports(req.params.id, req.userId);
@@ -164,6 +177,39 @@ const ProjectController = {
     try {
       await ProjectService.saveOverlays(req.params.id, req.userId, req.body.overlays || []);
       res.json({ saved: true });
+    } catch (err) { next(err); }
+  },
+
+  async generateCaptions(req, res, next) {
+    try {
+      const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
+      if (!project) throw new NotFoundError('Project not found');
+
+      const projectDir = path.join(config.storageRoot, project.id);
+      const dataDir = path.join(projectDir, 'data');
+
+      const transcript = JSON.parse(await fs.readFile(path.join(dataDir, 'transcript.json'), 'utf-8'));
+
+      let edl = { cuts: [] };
+      try {
+        edl = JSON.parse(await fs.readFile(path.join(dataDir, 'edl.json'), 'utf-8'));
+      } catch (_) { /* no EDL is fine */ }
+
+      const positionMap = {
+        'bottom-center': 'bottom',
+        'top-center': 'top',
+        'center': 'center',
+      };
+
+      const { fontSize, position, maxWords } = req.body;
+      const mappedOptions = {
+        ...(fontSize != null && { fontSize }),
+        ...(position != null && { position: positionMap[position] || position }),
+        ...(maxWords != null && { maxWordsPerLine: maxWords }),
+      };
+
+      const captionPath = await writeCaptionFile(projectDir, transcript, edl, mappedOptions);
+      res.json({ status: 'ok', path: captionPath });
     } catch (err) { next(err); }
   },
 };

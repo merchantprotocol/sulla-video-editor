@@ -10,6 +10,7 @@ const config = require('../utils/config');
 const log = require('../utils/logger').create('project');
 const TemplateRepository = require('../repositories/template.repository');
 const { SYSTEM_TEMPLATES } = require('../templates/system');
+const AnalyzeService = require('./analyze.service');
 
 function projectPath(projectId, ...segments) {
   return path.join(config.storageRoot, projectId, ...segments);
@@ -217,6 +218,19 @@ const ProjectService = {
       durationMs: Date.now() - start,
     });
 
+    // Fire-and-forget AI analysis (don't block transcription response)
+    AnalyzeService.analyzeTranscript(transcript).then(async (result) => {
+      try {
+        const sugPath = projectPath(projectId, 'data', 'suggestions.json');
+        await fs.writeFile(sugPath, JSON.stringify(result, null, 2));
+        log.info('Post-transcription AI suggestions saved', { projectId, count: result.suggestions?.length || 0 });
+      } catch (err) {
+        log.warn('Failed to save post-transcription suggestions', { projectId, error: err.message });
+      }
+    }).catch(err => {
+      log.warn('Post-transcription AI analysis failed', { projectId, error: err.message });
+    });
+
     return { word_count: transcript.words.length, duration_ms: transcript.duration_ms };
   },
 
@@ -323,6 +337,23 @@ const ProjectService = {
     if (!existsSync(sugPath)) return { suggestions: [] };
 
     return JSON.parse(await fs.readFile(sugPath, 'utf-8'));
+  },
+
+  async analyze(projectId, userId) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+
+    const transcriptPath = projectPath(projectId, 'data', 'transcript.json');
+    if (!existsSync(transcriptPath)) throw new ValidationError('No transcript yet — transcribe first');
+
+    const transcript = JSON.parse(await fs.readFile(transcriptPath, 'utf-8'));
+    const result = await AnalyzeService.analyzeTranscript(transcript);
+
+    const sugPath = projectPath(projectId, 'data', 'suggestions.json');
+    await fs.writeFile(sugPath, JSON.stringify(result, null, 2));
+    log.info('AI suggestions saved', { projectId, count: result.suggestions?.length || 0 });
+
+    return result;
   },
 
   async getWaveform(projectId, userId) {

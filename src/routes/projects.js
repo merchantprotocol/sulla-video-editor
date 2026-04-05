@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const validate = require('../middleware/validate');
 const ProjectController = require('../controllers/project.controller');
 const UploadController = require('../controllers/upload.controller');
 
@@ -8,7 +9,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get('/', ProjectController.list);
-router.post('/', ProjectController.create);
+router.post('/', validate({ name: 'string' }), ProjectController.create);
 router.get('/:id', ProjectController.get);
 router.put('/:id', ProjectController.update);
 router.delete('/:id', ProjectController.delete);
@@ -21,6 +22,8 @@ router.get('/:id/edl', ProjectController.getEdl);
 router.put('/:id/edl', ProjectController.saveEdl);
 router.get('/:id/waveform', ProjectController.getWaveform);
 router.get('/:id/suggestions', ProjectController.getSuggestions);
+router.post('/:id/captions', ProjectController.generateCaptions);
+router.post('/:id/analyze', ProjectController.analyze);
 router.put('/:id/tracks', ProjectController.saveTracks);
 router.get('/:id/overlays', ProjectController.getOverlays);
 router.put('/:id/overlays', ProjectController.saveOverlays);

@@ -1,18 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import styles from './ExportPanel.module.css'
+
+interface ExportEntry {
+  name: string
+  size: number
+  created_at: string
+}
 
 interface Props {
   open: boolean
   onClose: () => void
-  onExport: (options: { format: string; resolution: string; quality: string; studioSound?: boolean; normalizeAudio?: boolean }) => Promise<any>
+  onExport?: (options: { format: string; resolution: string; quality: string; studioSound?: boolean; normalizeAudio?: boolean }) => Promise<any>
   projectName: string
+  projectId?: string
 }
 
 const formats = ['16:9', '9:16', '1:1', '4:5']
 const resolutions = ['1080p', '720p', '4k']
 const qualities = ['high', 'medium', 'low']
 
-export default function ExportPanel({ open, onClose, onExport, projectName }: Props) {
+export default function ExportPanel({ open, onClose, onExport, projectName, projectId }: Props) {
   const [format, setFormat] = useState('16:9')
   const [resolution, setResolution] = useState('1080p')
   const [quality, setQuality] = useState('high')
@@ -22,13 +29,115 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
   const [normalizeAudio, setNormalizeAudio] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [progress, setProgress] = useState('')
+  const [progressPct, setProgressPct] = useState(0)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState('')
+  const [exports, setExports] = useState<ExportEntry[]>([])
 
-  async function handleExport() {
+  const fetchExports = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const token = localStorage.getItem('sulla_token')
+      const res = await fetch(`/api/projects/${projectId}/exports`, {
+        headers: { Authorization: 'Bearer ' + token },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setExports(data.exports || [])
+      }
+    } catch { /* ignore */ }
+  }, [projectId])
+
+  useEffect(() => {
+    if (open && projectId) fetchExports()
+  }, [open, projectId, fetchExports])
+
+  async function handleDeleteExport(filename: string) {
+    if (!projectId) return
+    try {
+      const token = localStorage.getItem('sulla_token')
+      await fetch(`/api/projects/${projectId}/exports/${filename}`, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token },
+      })
+      setExports(prev => prev.filter(e => e.name !== filename))
+    } catch { /* ignore */ }
+  }
+
+  async function handleExportSSE() {
+    setExporting(true)
+    setError('')
+    setProgress('Starting render...')
+    setProgressPct(0)
+    setResult(null)
+
+    try {
+      const token = localStorage.getItem('sulla_token')
+      const res = await fetch(`/api/projects/${projectId}/render/stream`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ format, resolution, quality, studioSound, normalizeAudio }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Server error ${res.status}`)
+      }
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const json = line.slice(6).trim()
+          if (!json) continue
+
+          try {
+            const evt = JSON.parse(json)
+            if (evt.type === 'progress') {
+              setProgressPct(evt.progress)
+              setProgress(`Rendering... ${evt.progress}%`)
+            } else if (evt.type === 'done') {
+              setResult(evt)
+              setProgress('')
+              setProgressPct(100)
+              fetchExports()
+            } else if (evt.type === 'error') {
+              throw new Error(evt.error)
+            }
+          } catch (parseErr: any) {
+            if (parseErr.message && parseErr.message !== 'Unexpected end of JSON input') {
+              throw parseErr
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Export failed')
+      setProgress('')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleExportFallback() {
+    if (!onExport) return
     setExporting(true)
     setError('')
     setProgress('Applying edits and rendering...')
+    setProgressPct(0)
     setResult(null)
 
     try {
@@ -39,6 +148,14 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
       setError(err.message || 'Export failed')
     } finally {
       setExporting(false)
+    }
+  }
+
+  function handleExport() {
+    if (projectId) {
+      handleExportSSE()
+    } else {
+      handleExportFallback()
     }
   }
 
@@ -142,6 +259,15 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
 
             {error && <div className={styles.error}>{error}</div>}
 
+            {exporting && projectId && (
+              <div className={styles.progressWrap}>
+                <div className={styles.progressBar}>
+                  <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
+                </div>
+                <span className={styles.progressLabel}>{progressPct}%</span>
+              </div>
+            )}
+
             <button className={styles.exportBtn} onClick={handleExport} disabled={exporting}>
               {exporting ? (
                 <><span className={styles.spinner} /> {progress}</>
@@ -152,6 +278,41 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
                 </>
               )}
             </button>
+
+            {projectId && (
+              <div className={styles.section} style={{ marginTop: 8 }}>
+                <div className={styles.label}>Export History</div>
+                {exports.length === 0 ? (
+                  <div className={styles.historyEmpty}>No exports yet</div>
+                ) : (
+                  <div className={styles.historyList}>
+                    {exports.map(exp => (
+                      <div key={exp.name} className={styles.historyItem}>
+                        <div className={styles.historyInfo}>
+                          <a
+                            className={styles.historyName}
+                            href={`/api/projects/${projectId}/exports/${exp.name}`}
+                            download
+                          >
+                            {exp.name}
+                          </a>
+                          <span className={styles.historyMeta}>
+                            {formatSize(exp.size)} · {new Date(exp.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <button
+                          className={styles.historyDelete}
+                          onClick={() => handleDeleteExport(exp.name)}
+                          title="Delete export"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

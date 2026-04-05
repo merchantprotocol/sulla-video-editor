@@ -85,6 +85,26 @@ const RenderController = {
       res.sendFile(filePath);
     } catch (err) { next(err); }
   },
+  async deleteExport(req, res, next) {
+    try {
+      const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
+      if (!project) throw new NotFoundError('Project not found');
+
+      const filename = req.params.filename;
+      if (!filename || filename.includes('..') || filename.includes('/')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+      }
+
+      const path = require('path');
+      const { unlinkSync, existsSync } = require('fs');
+      const config = require('../utils/config');
+      const filePath = path.join(config.storageRoot, project.id, 'exports', filename);
+      if (!existsSync(filePath)) throw new NotFoundError('Export not found');
+
+      unlinkSync(filePath);
+      res.json({ deleted: true });
+    } catch (err) { next(err); }
+  },
 };
 
 module.exports = RenderController;

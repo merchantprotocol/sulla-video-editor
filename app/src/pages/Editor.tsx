@@ -5,7 +5,7 @@ import { useEditor } from '../hooks/useEditor'
 import { api } from '../lib/api'
 import ExportPanel from '../components/ExportPanel'
 import CaptionsPanel from '../components/CaptionsPanel'
-import AutoClipsPanel from '../components/AutoClipsPanel'
+import AutoClipsPanel, { type AutoClip } from '../components/AutoClipsPanel'
 import UserProfileDropdown from '../components/UserProfileDropdown'
 import VideoOverlays, { type OverlayItem, createOverlay } from '../components/VideoOverlays'
 import OverlayControls from '../components/OverlayControls'
@@ -862,6 +862,99 @@ export default function Editor() {
   const editedDur = originalDur - totalCutSec
   const isClean = fillerCount === 0 && silenceCount === 0
 
+  // Generate auto-clips from transcript data
+  const autoClips = useMemo<AutoClip[]>(() => {
+    if (!transcript || transcript.words.length === 0) return []
+
+    const words = transcript.words
+    const silences = transcript.silences
+    const durationMs = transcript.duration_ms
+
+    // Build a silence lookup: ms ranges
+    const silenceRanges = silences.map(s => ({ start: s.start * 1000, end: s.end * 1000 }))
+
+    // Sliding window: find segments of 30-90s with high word density
+    const MIN_MS = 30_000
+    const MAX_MS = 90_000
+    const STEP_MS = 15_000
+    const candidates: { startMs: number; endMs: number; wordCount: number; fillerCount: number; silenceMs: number; firstWords: string }[] = []
+
+    for (let start = 0; start < durationMs - MIN_MS; start += STEP_MS) {
+      for (const len of [30_000, 45_000, 60_000, 90_000]) {
+        const end = start + len
+        if (end > durationMs) continue
+
+        const segWords = words.filter(w => w.start * 1000 >= start && w.end * 1000 <= end)
+        if (segWords.length < 10) continue
+
+        const fillers = segWords.filter(w => w.filler).length
+        const silenceMs = silenceRanges
+          .filter(s => s.start >= start && s.end <= end)
+          .reduce((sum, s) => sum + (s.end - s.start), 0)
+
+        // Take first ~8 words as title
+        const firstWords = segWords.slice(0, 8).map(w => w.word).join(' ')
+
+        candidates.push({ startMs: start, endMs: end, wordCount: segWords.length, fillerCount: fillers, silenceMs, firstWords })
+      }
+    }
+
+    if (candidates.length === 0) return []
+
+    // Score each candidate
+    const scored = candidates.map(c => {
+      const durationSec = (c.endMs - c.startMs) / 1000
+      const wordDensity = c.wordCount / durationSec // words per second
+      const fillerPenalty = c.fillerCount * 3
+      const silencePenalty = (c.silenceMs / (c.endMs - c.startMs)) * 40
+      const rawScore = wordDensity * 30 - fillerPenalty - silencePenalty
+      return { ...c, rawScore }
+    })
+
+    // Sort by score descending
+    scored.sort((a, b) => b.rawScore - a.rawScore)
+
+    // De-duplicate overlapping segments (keep higher scoring)
+    const selected: typeof scored = []
+    for (const c of scored) {
+      const overlaps = selected.some(s => c.startMs < s.endMs && c.endMs > s.startMs)
+      if (!overlaps) {
+        selected.push(c)
+        if (selected.length >= 10) break
+      }
+    }
+
+    // Sort by time for display
+    selected.sort((a, b) => a.startMs - b.startMs)
+
+    // Normalize scores to 0-100
+    const maxRaw = Math.max(...selected.map(s => s.rawScore), 1)
+    const minRaw = Math.min(...selected.map(s => s.rawScore), 0)
+    const range = maxRaw - minRaw || 1
+
+    return selected.map((c, i): AutoClip => {
+      const score = Math.round(((c.rawScore - minRaw) / range) * 55 + 40) // 40-95 range
+      const durSec = Math.round((c.endMs - c.startMs) / 1000)
+      const durMin = Math.floor(durSec / 60)
+      const durRemSec = durSec % 60
+      const startSec = Math.round(c.startMs / 1000)
+      const startMin = Math.floor(startSec / 60)
+      const startRemSec = startSec % 60
+
+      return {
+        id: String(i + 1),
+        title: `"${c.firstWords}..."`,
+        dur: `${durMin}:${String(durRemSec).padStart(2, '0')}`,
+        format: durSec <= 60 ? '9:16' : '16:9',
+        score,
+        level: score >= 80 ? 'high' : score >= 60 ? 'med' : 'low',
+        time: `${String(startMin).padStart(2, '0')}:${String(startRemSec).padStart(2, '0')}`,
+        start_ms: c.startMs,
+        end_ms: c.endMs,
+      }
+    })
+  }, [transcript])
+
   // Group words into blocks
   function groupWords(words: Word[], silences: Silence[]) {
     const blocks: { speaker: string; startTime: number; items: { type: 'word' | 'silence'; idx: number; data: Word | Silence }[] }[] = []
@@ -1365,6 +1458,7 @@ export default function Editor() {
           onClose={() => setExportOpen(false)}
           onExport={renderVideo}
           projectName={project.name}
+          projectId={id}
         />
         <CaptionsPanel
           open={captionsOpen}
@@ -1375,6 +1469,7 @@ export default function Editor() {
           open={clipsOpen}
           onClose={() => setClipsOpen(false)}
           onExportAll={() => { setClipsOpen(false); toast('Clip export queued — check the exports panel when complete') }}
+          clips={autoClips}
         />
       </div>
 

@@ -9,6 +9,8 @@ module.exports = {
   storageRoot: path.join(__dirname, '..', '..', 'storage', 'projects'),
   whisperCli: process.env.WHISPER_CLI || 'whisper-cli',
   whisperModel: process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggml-base.en.bin',
+  sullaChatUrl: process.env.SULLA_CHAT_URL || 'http://localhost:3000/v1/chat/completions',
+  sullaBearerToken: process.env.SULLA_BEARER_TOKEN || null,
   fillerWords: new Set([
     'um', 'uh', 'like', 'basically', 'actually', 'literally',
     'right', 'okay', 'so', 'well', 'you know', 'i mean',
