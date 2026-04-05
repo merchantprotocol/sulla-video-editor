@@ -24,9 +24,9 @@ RUN mkdir -p /opt/whisper-models \
 
 ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
 
-# Install Chromium for headless rendering (React → video frames)
+# Install Chromium deps + download Puppeteer's bundled Chromium
+# (Ubuntu 24.04's chromium-browser is a snap stub that doesn't work in Docker)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium-browser \
     fonts-liberation \
     fonts-noto-color-emoji \
     fonts-dejavu-core \
@@ -42,9 +42,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
+    libasound2t64 \
+    libpango-1.0-0 \
+    libcairo2 \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use the installed Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Install puppeteer (with bundled Chromium) globally
+RUN npm install -g puppeteer@latest \
+    && CHROMIUM_PATH=$(node -e "console.log(require('puppeteer').executablePath())") \
+    && echo "Chromium installed at: $CHROMIUM_PATH" \
+    && ln -sf "$CHROMIUM_PATH" /usr/local/bin/chromium
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium

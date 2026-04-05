@@ -1,4 +1,6 @@
-const puppeteer = require('puppeteer-core');
+// Use full puppeteer if available (has bundled Chromium), fall back to puppeteer-core
+let puppeteer;
+try { puppeteer = require('puppeteer'); } catch { puppeteer = require('puppeteer-core'); }
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
 const path = require('path');
