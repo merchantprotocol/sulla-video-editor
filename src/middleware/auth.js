@@ -6,9 +6,8 @@ const log = require('../utils/logger').create('auth');
 
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) throw new UnauthorizedError();
-
-  const token = header.slice(7);
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : req.cookies?.sulla_token;
+  if (!token) throw new UnauthorizedError();
 
   // Check API key bypass first
   if (config.apiKey && token === config.apiKey) {

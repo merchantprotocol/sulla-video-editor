@@ -12,7 +12,9 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp \
     && cmake -B build \
     && cmake --build build --config Release -j$(nproc) \
     && cp build/bin/whisper-cli /usr/local/bin/whisper-cli \
-    && chmod +x /usr/local/bin/whisper-cli
+    && chmod +x /usr/local/bin/whisper-cli \
+    && cp build/src/libwhisper.so* /usr/local/lib/ \
+    && ldconfig
 
 # Download the base English model
 RUN cd /opt/whisper.cpp \

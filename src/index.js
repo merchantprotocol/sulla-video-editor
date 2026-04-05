@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const cookieParser = require('cookie-parser');
 const config = require('./utils/config');
 const log = require('./utils/logger').create('server');
 const requestId = require('./middleware/requestId');
@@ -14,6 +15,7 @@ app.use(requestId);
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.raw({ type: 'application/octet-stream', limit: '2gb' }));
+app.use(cookieParser());
 
 // ─── Health ─────────────────────────────────────────────────
 
