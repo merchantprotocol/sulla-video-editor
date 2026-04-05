@@ -4,7 +4,7 @@ import styles from './ExportPanel.module.css'
 interface Props {
   open: boolean
   onClose: () => void
-  onExport: (options: { format: string; resolution: string; quality: string }) => Promise<any>
+  onExport: (options: { format: string; resolution: string; quality: string; studioSound?: boolean; normalizeAudio?: boolean }) => Promise<any>
   projectName: string
 }
 
@@ -32,7 +32,7 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
     setResult(null)
 
     try {
-      const data = await onExport({ format, resolution, quality })
+      const data = await onExport({ format, resolution, quality, studioSound, normalizeAudio })
       setResult(data)
       setProgress('')
     } catch (err: any) {

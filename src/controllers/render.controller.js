@@ -8,8 +8,8 @@ const RenderController = {
       const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
       if (!project) throw new NotFoundError('Project not found');
 
-      const { format, resolution, codec, quality } = req.body;
-      const result = await RenderService.render(project.id, { format, resolution, codec, quality });
+      const { format, resolution, codec, quality, studioSound, normalizeAudio } = req.body;
+      const result = await RenderService.render(project.id, { format, resolution, codec, quality, studioSound, normalizeAudio });
 
       await ProjectRepository.update(project.id, { status: 'exported' });
 
@@ -39,8 +39,8 @@ const RenderController = {
       const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
       if (!project) throw new NotFoundError('Project not found');
 
-      const { format, resolution, codec, quality } = req.body;
-      const emitter = RenderService.renderWithProgress(project.id, { format, resolution, codec, quality });
+      const { format, resolution, codec, quality, studioSound, normalizeAudio } = req.body;
+      const emitter = RenderService.renderWithProgress(project.id, { format, resolution, codec, quality, studioSound, normalizeAudio });
 
       // SSE headers
       res.writeHead(200, {

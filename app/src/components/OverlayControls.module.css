@@ -1,0 +1,53 @@
+.panel { display: flex; flex-direction: column; gap: 8px; }
+
+.sectionTitle { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+
+/* Add overlay buttons */
+.addRow { display: flex; gap: 4px; }
+.addBtn { width: 32px; height: 32px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
+.addBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.addBtn svg { width: 14px; height: 14px; }
+
+/* Layer list */
+.layerList { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.empty { font-size: 11px; color: var(--text-dim); padding: 8px 0; }
+
+.layerItem { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.1s; }
+.layerItem:hover { background: var(--bg-hover); }
+.layerItemSelected { background: var(--accent-soft); }
+
+.layerIcon { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.layerIcon svg { width: 14px; height: 14px; }
+.layerIconHidden { opacity: 0.3; }
+
+.layerName { flex: 1; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+
+.layerToggle, .layerDelete { width: 20px; height: 20px; background: none; border: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.1s; }
+.layerToggle:hover { color: var(--text-secondary); background: var(--bg-hover); }
+.layerDelete:hover { color: var(--red); background: var(--red-soft); }
+.layerToggle svg, .layerDelete svg { width: 12px; height: 12px; }
+
+/* Properties panel */
+.props { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+
+.propRow { display: flex; align-items: center; gap: 8px; }
+.propLabel { font-size: 10px; color: var(--text-muted); width: 64px; flex-shrink: 0; }
+
+.textInput { flex: 1; font-size: 11px; padding: 4px 8px; border: 1px solid var(--border-visible); border-radius: 4px; background: var(--bg-elevated); color: var(--text-primary); font-family: var(--sans); }
+.textInput:focus { outline: none; border-color: var(--accent); }
+
+.selectInput { flex: 1; font-size: 11px; padding: 4px 6px; border: 1px solid var(--border-visible); border-radius: 4px; background: var(--bg-elevated); color: var(--text-primary); font-family: var(--sans); }
+
+.colorInput { width: 28px; height: 22px; border: 1px solid var(--border-visible); border-radius: 4px; cursor: pointer; padding: 0; background: none; }
+
+.numInput { width: 44px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--border-visible); border-radius: 4px; background: var(--bg-elevated); color: var(--text-primary); font-family: var(--mono); text-align: center; }
+
+.slider { flex: 1; accent-color: var(--accent); height: 3px; }
+.sliderVal { font-size: 10px; font-family: var(--mono); color: var(--text-dim); min-width: 32px; text-align: right; }
+
+.shapeRow { display: flex; gap: 4px; flex: 1; }
+.shapeBtn { padding: 3px 8px; font-size: 10px; border: 1px solid var(--border-visible); border-radius: 4px; background: none; color: var(--text-secondary); cursor: pointer; font-family: var(--sans); transition: all 0.12s; }
+.shapeBtn:hover { border-color: var(--accent); }
+.shapeBtnActive { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+.posVal { font-size: 10px; font-family: var(--mono); color: var(--text-dim); }

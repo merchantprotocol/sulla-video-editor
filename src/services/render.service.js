@@ -110,6 +110,9 @@ async function render(projectId, options = {}) {
     resolution = '1080p',
     codec = 'libx264',
     quality = 'high',
+    studioSound = false,
+    normalizeAudio = false,
+    targetLufs = -14,
   } = options;
 
   log.info('Starting render', { projectId, format, resolution, quality });
@@ -171,6 +174,31 @@ async function render(projectId, options = {}) {
   } else {
     // No cuts — just scale
     args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+  }
+
+  // Audio enhancement filters (applied before encoding)
+  const audioFilters = [];
+  if (studioSound) {
+    // High-pass to remove rumble, de-ess, compress dynamics, add presence
+    audioFilters.push('highpass=f=80');
+    audioFilters.push('lowpass=f=12000');
+    audioFilters.push('acompressor=threshold=-20dB:ratio=4:attack=5:release=50');
+    audioFilters.push('equalizer=f=3000:t=q:w=1.5:g=3'); // presence boost
+    audioFilters.push('equalizer=f=200:t=q:w=1:g=-2');    // reduce mud
+    log.info('Studio Sound enabled', { projectId });
+  }
+  if (normalizeAudio) {
+    audioFilters.push(`loudnorm=I=${targetLufs}:TP=-1.5:LRA=11`);
+    log.info('Audio normalization enabled', { projectId, targetLufs });
+  }
+  if (audioFilters.length > 0) {
+    // If we already have -af from EDL select, chain onto it; otherwise add new
+    const existingAfIdx = args.indexOf('-af');
+    if (existingAfIdx >= 0) {
+      args[existingAfIdx + 1] += ',' + audioFilters.join(',');
+    } else {
+      args.push('-af', audioFilters.join(','));
+    }
   }
 
   // Codec settings

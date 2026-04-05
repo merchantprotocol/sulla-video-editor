@@ -1,0 +1,26 @@
+/* Overlay wrapper — all overlays are absolutely positioned inside the video frame */
+.overlay { display: flex; flex-direction: column; align-items: center; transition: box-shadow 0.15s; }
+.overlay:hover { z-index: 15 !important; }
+.overlaySelected { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.overlayLabel { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 9px; font-family: var(--mono); color: var(--accent); background: rgba(0,0,0,0.7); padding: 1px 6px; border-radius: 3px; white-space: nowrap; pointer-events: none; }
+
+/* PiP camera bubble */
+.pip { width: 100%; height: 100%; border-style: solid; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #1a1d21; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+.pip svg { color: #666; }
+
+/* Caption box */
+.captionBox { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 4px 12px; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Text overlay */
+.textBox { width: 100%; height: 100%; display: flex; align-items: center; padding: 4px 8px; font-weight: 500; overflow: hidden; }
+
+/* Logo */
+.logoBox { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); overflow: hidden; }
+.logoImg { width: 100%; height: 100%; object-fit: contain; }
+.logoPlaceholder { display: flex; flex-direction: column; align-items: center; gap: 2px; color: #666; font-size: 9px; }
+
+/* Resize handles (future) */
+.resizeHandle { position: absolute; width: 8px; height: 8px; background: var(--accent); border: 1px solid white; border-radius: 50%; z-index: 30; }
+.resizeHandleSE { bottom: -4px; right: -4px; cursor: se-resize; }
+.resizeHandleNW { top: -4px; left: -4px; cursor: nw-resize; }

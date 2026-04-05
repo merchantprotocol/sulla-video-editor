@@ -7,6 +7,8 @@ import ExportPanel from '../components/ExportPanel'
 import CaptionsPanel from '../components/CaptionsPanel'
 import AutoClipsPanel from '../components/AutoClipsPanel'
 import UserProfileDropdown from '../components/UserProfileDropdown'
+import VideoOverlays, { type OverlayItem, createOverlay } from '../components/VideoOverlays'
+import OverlayControls from '../components/OverlayControls'
 import styles from './Editor.module.css'
 
 interface Word { word: string; start: number; end: number; confidence: number; speaker: string; filler?: boolean }
@@ -27,7 +29,10 @@ export default function Editor() {
   const [clipsOpen, setClipsOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [overlays, setOverlays] = useState<OverlayItem[]>([])
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const videoFrameRef = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
 
   // UI state
