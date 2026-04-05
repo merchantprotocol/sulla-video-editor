@@ -19,28 +19,38 @@
 .sectionTitle { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 .count { font-size: 11px; padding: 1px 7px; background: var(--bg-elevated); border-radius: 10px; color: var(--text-dim); font-weight: 500; }
 
-.projectsGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 48px; }
-.projectCard { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.15s; }
-.projectCard:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.04); transform: translateY(-1px); }
-.projectThumb { width: 100%; aspect-ratio: 16/9; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; position: relative; }
-.projectThumb svg { width: 32px; height: 32px; color: var(--text-dim); opacity: 0.3; }
-.durationBadge { position: absolute; bottom: 8px; right: 8px; padding: 2px 6px; background: rgba(0,0,0,0.6); border-radius: 4px; font-size: 10px; font-family: var(--mono); color: white; }
-.statusDot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--bg-surface); }
-.edited { background: var(--green); }
-.draft { background: var(--accent); }
-.projectBody { padding: 12px 14px; }
-.projectName { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
-.projectMeta { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
-.tag { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; }
-
-.templatesRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.templateCard { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.15s; }
-.templateCard:hover { border-color: var(--accent); }
-.templateThumb { width: 100%; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-.podcast { background: linear-gradient(135deg, #1a1d21, #2a3040); color: #5096b3; }
-.youtube { background: linear-gradient(135deg, #2d1117, #3d2030); color: #e5534b; }
-.social { background: linear-gradient(135deg, #0d2117, #1d3020); color: #3fb950; }
-.tutorial { background: linear-gradient(135deg, #1d1730, #2d2040); color: #b392f0; }
-.templateName { padding: 8px 10px; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
-
+/* Empty state */
 .emptyState { text-align: center; padding: 48px 24px; color: var(--text-muted); font-size: 14px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; }
+.emptyIcon { margin-bottom: 12px; color: var(--text-dim); opacity: 0.3; }
+.emptyBtn { display: inline-block; margin-top: 16px; padding: 10px 20px; background: var(--accent); color: white; border-radius: 8px; font-size: 13px; font-weight: 600; }
+
+/* Project list */
+.projectsList { display: flex; flex-direction: column; gap: 8px; }
+
+.projectRow { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; transition: all 0.12s; }
+.projectRow:hover { border-color: var(--border-visible); box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+
+/* Thumbnail */
+.projectThumb { width: 160px; height: 90px; border-radius: 8px; overflow: hidden; background: var(--bg-elevated); flex-shrink: 0; position: relative; }
+.thumbPlaceholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-dim); cursor: pointer; transition: all 0.12s; }
+.thumbPlaceholder:hover { color: var(--accent); background: var(--accent-soft); }
+.thumbVideo { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+.durationBadge { position: absolute; bottom: 4px; right: 4px; padding: 1px 5px; background: rgba(0,0,0,0.7); border-radius: 3px; font-size: 10px; font-family: var(--mono); color: white; pointer-events: none; }
+
+/* Info */
+.projectInfo { flex: 1; min-width: 0; }
+.projectName { font-size: 14px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.projectName:hover { color: var(--accent); }
+.projectMeta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); flex-wrap: wrap; }
+
+.statusTag { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; }
+.draft { background: var(--accent-soft); color: var(--accent); }
+.editing { background: rgba(154,103,0,0.06); color: var(--yellow); }
+.exported { background: var(--green-soft); color: var(--green); }
+
+/* Actions */
+.projectActions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.actionBtn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; transition: all 0.12s; text-decoration: none; }
+.actionBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.deleteBtn:hover { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+.actionBtn:disabled { opacity: 0.3; cursor: default; }

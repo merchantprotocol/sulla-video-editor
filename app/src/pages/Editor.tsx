@@ -421,6 +421,32 @@ export default function Editor() {
                 </div>
               </>
             )}
+
+            {/* Exports */}
+            {project.status === 'exported' && (
+              <>
+                <div className={styles.sectionTitle} style={{ marginTop: 16 }}>
+                  Exports
+                </div>
+                <div className={styles.exportCard}>
+                  <video
+                    className={styles.exportVideo}
+                    src={`/api/projects/${project.id}/exports/composition.mp4`}
+                    controls
+                  />
+                  <div className={styles.exportActions}>
+                    <a
+                      className={styles.downloadBtn}
+                      href={`/api/projects/${project.id}/exports/composition.mp4`}
+                      download={`${project.name}.mp4`}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Download MP4
+                    </a>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Export panel overlay */}

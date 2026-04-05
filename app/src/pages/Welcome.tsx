@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useState } from 'react'
 import { useProjects, type Project } from '../hooks/useProjects'
 import styles from './Welcome.module.css'
 
@@ -24,6 +25,7 @@ function formatSize(bytes: number | null) {
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Just now'
   if (mins < 60) return `${mins}m ago`
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}h ago`
@@ -34,7 +36,18 @@ function timeAgo(dateStr: string) {
 }
 
 export default function Welcome() {
-  const { projects, loading } = useProjects()
+  const { projects, loading, deleteProject } = useProjects()
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('Delete this project and all its files?')) return
+    setDeleting(id)
+    await deleteProject(id)
+    setDeleting(null)
+  }
 
   return (
     <div className={styles.main}>
@@ -68,38 +81,82 @@ export default function Welcome() {
           </Link>
         </div>
 
-        {/* Projects list */}
         <div className={styles.sectionTitle}>
-          Recent Projects <span className={styles.count}>{projects.length}</span>
+          Projects <span className={styles.count}>{projects.length}</span>
         </div>
 
         {loading ? (
           <div className={styles.emptyState}>Loading projects...</div>
         ) : projects.length === 0 ? (
           <div className={styles.emptyState}>
-            <p>No projects yet. Create your first one!</p>
+            <div className={styles.emptyIcon}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="48" height="48"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            </div>
+            <p>No projects yet</p>
+            <Link to="/new" className={styles.emptyBtn}>Create your first project</Link>
           </div>
         ) : (
-          <div className={styles.projectsGrid}>
+          <div className={styles.projectsList}>
             {projects.map(p => (
-              <Link key={p.id} to={`/editor/${p.id}`} className={styles.projectCard}>
+              <div key={p.id} className={styles.projectRow}>
+                {/* Thumbnail / Video preview */}
                 <div className={styles.projectThumb}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
+                  {p.status === 'exported' && playingId === p.id ? (
+                    <video
+                      className={styles.thumbVideo}
+                      src={`/api/projects/${p.id}/exports/composition.mp4`}
+                      autoPlay
+                      controls
+                      onEnded={() => setPlayingId(null)}
+                    />
+                  ) : (
+                    <div className={styles.thumbPlaceholder} onClick={() => p.status === 'exported' && setPlayingId(p.id)}>
+                      {p.status === 'exported' ? (
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="32" height="32"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                      )}
+                    </div>
+                  )}
                   {p.duration_ms && <span className={styles.durationBadge}>{formatDuration(p.duration_ms)}</span>}
-                  <div className={`${styles.statusDot} ${styles[p.status]}`} />
                 </div>
-                <div className={styles.projectBody}>
-                  <div className={styles.projectName}>{p.name}</div>
+
+                {/* Project info */}
+                <div className={styles.projectInfo}>
+                  <Link to={`/editor/${p.id}`} className={styles.projectName}>{p.name}</Link>
                   <div className={styles.projectMeta}>
-                    <span className={`${styles.tag} ${styles[p.status]}`}>{p.status}</span>
+                    <span className={`${styles.statusTag} ${styles[p.status]}`}>{p.status}</span>
                     {p.resolution && <span>{p.resolution}</span>}
                     {p.file_size ? <span>{formatSize(p.file_size)}</span> : null}
                     <span>{timeAgo(p.updated_at)}</span>
                   </div>
                 </div>
-              </Link>
+
+                {/* Actions */}
+                <div className={styles.projectActions}>
+                  {p.status === 'exported' && (
+                    <a
+                      className={styles.actionBtn}
+                      href={`/api/projects/${p.id}/exports/composition.mp4`}
+                      download={`${p.name}.mp4`}
+                      title="Download"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </a>
+                  )}
+                  <Link className={styles.actionBtn} to={`/editor/${p.id}`} title="Edit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  </Link>
+                  <button
+                    className={`${styles.actionBtn} ${styles.deleteBtn}`}
+                    onClick={(e) => handleDelete(e, p.id)}
+                    disabled={deleting === p.id}
+                    title="Delete"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
