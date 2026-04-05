@@ -98,7 +98,7 @@ async function buildProject(projectDir) {
 
   if (!existsSync(path.join(projectDir, 'node_modules'))) {
     log.info('Installing dependencies');
-    await exec('npm', ['install', '--production=false'], { cwd: projectDir, timeout: 120000 });
+    await exec('npm', ['install', '--include=dev'], { cwd: projectDir, timeout: 120000 });
   }
 
   log.info('Building project');
@@ -142,11 +142,23 @@ async function captureFrames(baseUrl, framesDir, { width, height, fps, totalFram
   const browser = await puppeteer.launch({
     executablePath: CHROMIUM_PATH,
     headless: 'shell',
+    env: {
+      ...process.env,
+      HOME: '/tmp',
+      XDG_CONFIG_HOME: '/tmp/.config',
+      XDG_CACHE_HOME: '/tmp/.cache',
+    },
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
+      '--disable-crash-reporter',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-default-apps',
+      '--disable-translate',
+      '--no-first-run',
       `--window-size=${width},${height}`,
     ],
   });
