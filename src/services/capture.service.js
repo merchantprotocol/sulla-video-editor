@@ -11,7 +11,7 @@ const log = require('../utils/logger').create('capture');
 
 const exec = promisify(execFile);
 
-const CHROMIUM_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
+const CHROMIUM_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable';
 
 /**
  * Render a React composition project to video.

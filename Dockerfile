@@ -24,35 +24,33 @@ RUN mkdir -p /opt/whisper-models \
 
 ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
 
-# Install Chromium deps + download Puppeteer's bundled Chromium
-# (Ubuntu 24.04's chromium-browser is a snap stub that doesn't work in Docker)
+# Install Chromium dependencies + Google Chrome Stable
+# (Ubuntu 24.04's chromium-browser is a snap stub, doesn't work in Docker)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-noto-color-emoji \
     fonts-dejavu-core \
     fonts-freefont-ttf \
+    libasound2t64 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
+    libcairo2 \
     libcups2 \
     libdrm2 \
     libgbm1 \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
+    libpango-1.0-0 \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
-    libasound2t64 \
-    libpango-1.0-0 \
-    libcairo2 \
+    wget \
     xdg-utils \
+    && wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get install -y ./google-chrome-stable_current_amd64.deb \
+    && rm google-chrome-stable_current_amd64.deb \
     && rm -rf /var/lib/apt/lists/*
 
-# Install puppeteer (with bundled Chromium) globally
-RUN npm install -g puppeteer@latest \
-    && CHROMIUM_PATH=$(node -e "console.log(require('puppeteer').executablePath())") \
-    && echo "Chromium installed at: $CHROMIUM_PATH" \
-    && ln -sf "$CHROMIUM_PATH" /usr/local/bin/chromium
-
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
