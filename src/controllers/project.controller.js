@@ -49,8 +49,36 @@ const ProjectController = {
 
   async transcribe(req, res, next) {
     try {
-      const result = await ProjectService.transcribe(req.params.id, req.userId);
-      res.json({ status: 'transcribed', ...result });
+      const stream = ProjectService.transcribeStream(req.params.id, req.userId);
+      const project = await stream.projectLookup;
+
+      // Set up SSE
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // disable nginx buffering
+      });
+
+      const emitter = stream.start(project);
+
+      emitter.on('progress', (pct) => {
+        res.write(`data: ${JSON.stringify({ type: 'progress', progress: pct })}\n\n`);
+      });
+
+      emitter.on('complete', (summary) => {
+        res.write(`data: ${JSON.stringify({ type: 'done', ...summary })}\n\n`);
+        res.end();
+      });
+
+      emitter.on('error', (err) => {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+        res.end();
+      });
+
+      req.on('close', () => {
+        emitter.removeAllListeners();
+      });
     } catch (err) { next(err); }
   },
 

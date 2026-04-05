@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
+import { chunkedUpload } from '../lib/chunkedUpload'
 
 export interface Project {
   id: string
@@ -59,26 +60,58 @@ export function useProject(id: string) {
       .finally(() => setLoading(false))
   }, [id])
 
-  async function importMedia(file: File) {
-    const res = await fetch(`/api/projects/${id}/import`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('sulla_token')}`,
-        'Content-Type': 'application/octet-stream',
-        'X-Filename': file.name,
-      },
-      body: file,
+  async function importMedia(file: File, onProgress?: (pct: number) => void) {
+    const data = await chunkedUpload(id, file, (p) => {
+      if (onProgress) onProgress(p.percent)
     })
-    if (!res.ok) throw new Error((await res.json()).error || 'Upload failed')
-    const data = await res.json()
-    setProject(p => p ? { ...p, duration_ms: data.duration_ms, resolution: data.resolution, file_size: data.file_size, status: 'editing' } : p)
+    setProject(p => p ? { ...p, duration_ms: data.duration_ms, resolution: data.resolution, file_size: data.file_size, status: 'editing' as const } : p)
     return data
   }
 
-  async function transcribe() {
-    const data = await api.post(`/projects/${id}/transcribe`, {})
+  async function transcribe(onProgress?: (pct: number) => void) {
+    const token = localStorage.getItem('sulla_token')
+    const res = await fetch(`/api/projects/${id}/transcribe`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Transcription failed: ${res.status}`)
+    }
+
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let result: any = null
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const msg = JSON.parse(line.slice(6))
+
+        if (msg.type === 'progress' && onProgress) {
+          onProgress(msg.progress)
+        } else if (msg.type === 'done') {
+          result = msg
+        } else if (msg.type === 'error') {
+          throw new Error(msg.error)
+        }
+      }
+    }
+
     setFiles(f => ({ ...f, hasTranscript: true }))
-    return data
+    return result
   }
 
   async function getTranscript() {

@@ -1,0 +1,27 @@
+{
+  "name": "Social Media",
+  "slug": "social",
+  "description": "Vertical-first template for TikTok, Reels, and Shorts. Caption-focused layout with automatic clip extraction and tight silence trimming for punchy, scroll-stopping content.",
+  "theme": {
+    "accentColor": "#3fb950",
+    "background": "dark",
+    "fontFamily": "Inter",
+    "captionStyle": "highlight"
+  },
+  "scenes": [
+    { "type": "CaptionFocus" },
+    { "type": "FullFrame" },
+    { "type": "TitleCard", "duration": 3 }
+  ],
+  "rules": {
+    "removeFillers": true,
+    "trimSilence": { "enabled": true, "thresholdMs": 1000 },
+    "autoCaptions": true,
+    "autoClips": true
+  },
+  "export": {
+    "defaultFormat": "9:16",
+    "defaultResolution": "1080p",
+    "defaultCodec": "h264"
+  }
+}

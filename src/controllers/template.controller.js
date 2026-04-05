@@ -41,6 +41,20 @@ const TemplateController = {
   async defaults(req, res) {
     res.json({ templates: TemplateService.getDefaultTemplates() });
   },
+
+  async listSystem(req, res, next) {
+    try {
+      const templates = await TemplateService.listSystem();
+      res.json({ templates });
+    } catch (err) { next(err); }
+  },
+
+  async getBySlug(req, res, next) {
+    try {
+      const template = await TemplateService.getBySlug(req.params.slug);
+      res.json({ template });
+    } catch (err) { next(err); }
+  },
 };
 
 module.exports = TemplateController;

@@ -3,10 +3,25 @@ const pool = require('../lib/db');
 const TemplateRepository = {
   async findByOrgId(orgId) {
     const { rows } = await pool.query(
-      'SELECT id, name, config, created_by, created_at, updated_at FROM templates WHERE org_id = $1 ORDER BY updated_at DESC',
+      'SELECT id, name, slug, description, config, is_system, created_by, created_at, updated_at FROM templates WHERE org_id = $1 AND is_system = false ORDER BY updated_at DESC',
       [orgId]
     );
     return rows;
+  },
+
+  async findSystemTemplates() {
+    const { rows } = await pool.query(
+      'SELECT id, name, slug, description, config, is_system, created_at, updated_at FROM templates WHERE is_system = true ORDER BY name ASC'
+    );
+    return rows;
+  },
+
+  async findBySlug(slug) {
+    const { rows } = await pool.query(
+      'SELECT * FROM templates WHERE slug = $1 AND is_system = true',
+      [slug]
+    );
+    return rows[0] || null;
   },
 
   async findById(id) {
@@ -15,7 +30,10 @@ const TemplateRepository = {
   },
 
   async findByIdAndOrg(id, orgId) {
-    const { rows } = await pool.query('SELECT * FROM templates WHERE id = $1 AND org_id = $2', [id, orgId]);
+    const { rows } = await pool.query(
+      'SELECT * FROM templates WHERE id = $1 AND (org_id = $2 OR is_system = true)',
+      [id, orgId]
+    );
     return rows[0] || null;
   },
 

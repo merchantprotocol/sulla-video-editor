@@ -1,0 +1,28 @@
+{
+  "name": "Tutorial",
+  "slug": "tutorial",
+  "description": "Clean, light-themed template for instructional and how-to videos. Features a small presenter PiP over full-frame content, generous silence trimming for pacing, and boxed captions for readability.",
+  "theme": {
+    "accentColor": "#7c3aed",
+    "background": "light",
+    "fontFamily": "Inter",
+    "captionStyle": "box"
+  },
+  "scenes": [
+    { "type": "TitleCard", "duration": 5 },
+    { "type": "FullFrame" },
+    { "type": "PiP", "pipPosition": "top-right", "pipSize": 100, "pipShape": "rounded" },
+    { "type": "FullFrame" },
+    { "type": "TitleCard", "duration": 6 }
+  ],
+  "rules": {
+    "removeFillers": true,
+    "trimSilence": { "enabled": true, "thresholdMs": 2000 },
+    "autoCaptions": true
+  },
+  "export": {
+    "defaultFormat": "16:9",
+    "defaultResolution": "1080p",
+    "defaultCodec": "h264"
+  }
+}

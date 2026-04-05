@@ -139,6 +139,62 @@ const ProjectService = {
     return { word_count: transcript.words.length, duration_ms: transcript.duration_ms };
   },
 
+  /**
+   * Stream transcription progress via an EventEmitter.
+   * Returns the emitter immediately; caller listens for 'progress', 'complete', 'error'.
+   * On whisper completion, saves transcript and emits 'complete' with summary.
+   */
+  transcribeStream(projectId, userId) {
+    const audioPath = projectPath(projectId, 'media', 'audio.wav');
+    const project = ProjectRepository.findByIdAndUser(projectId, userId);
+
+    return {
+      projectLookup: project,
+      start(resolvedProject) {
+        if (!resolvedProject) throw new NotFoundError('Project not found');
+        if (!existsSync(audioPath)) throw new ValidationError('No audio file found. Import media first.');
+
+        log.info('Starting transcription (streaming)', { projectId });
+        const startTime = Date.now();
+        const whisper = TranscribeService.transcribeWithProgress(audioPath);
+
+        // Re-emit progress from whisper
+        const { EventEmitter } = require('events');
+        const emitter = new EventEmitter();
+
+        whisper.on('progress', (pct) => emitter.emit('progress', pct));
+
+        whisper.on('done', async (transcript) => {
+          try {
+            const transcriptPath = projectPath(projectId, 'data', 'transcript.json');
+            await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 2));
+            await ProjectRepository.update(projectId, { transcript_path: transcriptPath });
+
+            const fillerCount = transcript.words.filter(w => w.filler).length;
+            log.info('Transcription complete (streaming)', {
+              projectId,
+              words: transcript.words.length,
+              fillers: fillerCount,
+              silences: transcript.silences.length,
+              durationMs: Date.now() - startTime,
+            });
+
+            emitter.emit('complete', {
+              word_count: transcript.word_count,
+              duration_ms: transcript.duration_ms,
+            });
+          } catch (err) {
+            emitter.emit('error', err);
+          }
+        });
+
+        whisper.on('error', (err) => emitter.emit('error', err));
+
+        return emitter;
+      },
+    };
+  },
+
   async getTranscript(projectId, userId) {
     const project = await ProjectRepository.findByIdAndUser(projectId, userId);
     if (!project) throw new NotFoundError('Project not found');

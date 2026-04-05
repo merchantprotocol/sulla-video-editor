@@ -1,73 +1,35 @@
 const TemplateRepository = require('../repositories/template.repository');
 const OrgRepository = require('../repositories/org.repository');
 const { NotFoundError, ValidationError } = require('../utils/errors');
-
-// Default template configs for each rule type
-const DEFAULT_TEMPLATES = {
-  podcast: {
-    theme: { accentColor: '#5096b3', background: 'dark', fontFamily: 'Inter', captionStyle: 'bold' },
-    scenes: [
-      { type: 'TitleCard', duration: 4, transitionIn: 'fade', transitionOut: 'crossfade' },
-      { type: 'PiP', pipPosition: 'bottom-right', pipSize: 120, pipShape: 'circle' },
-      { type: 'TitleCard', duration: 6, transitionIn: 'crossfade', transitionOut: 'fade' },
-    ],
-    rules: { removeFillers: true, trimSilence: { enabled: true, thresholdMs: 1500 }, studioSound: true, normalize: { enabled: true, targetLufs: -14 }, autoCaptions: true, autoClips: false },
-    export: { defaultFormat: '16:9', defaultResolution: '1080p', defaultCodec: 'h264' },
-  },
-  youtube: {
-    theme: { accentColor: '#e5534b', background: 'dark', fontFamily: 'Inter', captionStyle: 'highlight' },
-    scenes: [
-      { type: 'TitleCard', duration: 3, transitionIn: 'fade' },
-      { type: 'FullFrame', transitionIn: 'cut' },
-      { type: 'PiP', pipPosition: 'bottom-right', pipSize: 140, pipShape: 'rounded' },
-      { type: 'BRoll', transitionIn: 'crossfade' },
-      { type: 'PiP' },
-      { type: 'CaptionFocus' },
-      { type: 'TitleCard', duration: 8, transitionIn: 'crossfade', transitionOut: 'fade' },
-    ],
-    rules: { removeFillers: true, trimSilence: { enabled: true, thresholdMs: 1500 }, studioSound: true, normalize: { enabled: true, targetLufs: -14 }, autoCaptions: true, autoClips: true },
-    export: { defaultFormat: '16:9', defaultResolution: '1080p', defaultCodec: 'h264' },
-  },
-  social: {
-    theme: { accentColor: '#3fb950', background: 'dark', fontFamily: 'Inter', captionStyle: 'highlight' },
-    scenes: [
-      { type: 'CaptionFocus' },
-      { type: 'FullFrame' },
-      { type: 'TitleCard', duration: 3 },
-    ],
-    rules: { removeFillers: true, trimSilence: { enabled: true, thresholdMs: 1000 }, autoCaptions: true, autoClips: true },
-    export: { defaultFormat: '9:16', defaultResolution: '1080p', defaultCodec: 'h264' },
-  },
-  tutorial: {
-    theme: { accentColor: '#7c3aed', background: 'light', fontFamily: 'Inter', captionStyle: 'box' },
-    scenes: [
-      { type: 'TitleCard', duration: 5 },
-      { type: 'FullFrame' },
-      { type: 'PiP', pipPosition: 'top-right', pipSize: 100, pipShape: 'rounded' },
-      { type: 'FullFrame' },
-      { type: 'TitleCard', duration: 6 },
-    ],
-    rules: { removeFillers: true, trimSilence: { enabled: true, thresholdMs: 2000 }, autoCaptions: true },
-    export: { defaultFormat: '16:9', defaultResolution: '1080p', defaultCodec: 'h264' },
-  },
-  interview: {
-    theme: { accentColor: '#d29922', background: 'dark', fontFamily: 'Inter', captionStyle: 'bold' },
-    scenes: [
-      { type: 'TitleCard', duration: 4 },
-      { type: 'SideBySide' },
-      { type: 'FullFrame' },
-      { type: 'TitleCard', duration: 5 },
-    ],
-    rules: { removeFillers: true, trimSilence: { enabled: true, thresholdMs: 1500 }, studioSound: true, normalize: { enabled: true, targetLufs: -14 }, autoCaptions: true },
-    export: { defaultFormat: '16:9', defaultResolution: '1080p', defaultCodec: 'h264' },
-  },
-};
+const { SYSTEM_TEMPLATES } = require('../templates/system');
 
 const TemplateService = {
   async list(userId) {
+    let systemTemplates;
+    try {
+      systemTemplates = await TemplateRepository.findSystemTemplates();
+    } catch {
+      // Migration not yet run — fall back to file-based templates
+      systemTemplates = [];
+    }
+
+    // If no system templates in DB, serve directly from JSON files
+    if (systemTemplates.length === 0) {
+      systemTemplates = Object.values(SYSTEM_TEMPLATES).map(tpl => ({
+        id: `system-${tpl.slug}`,
+        name: tpl.name,
+        slug: tpl.slug,
+        description: tpl.description,
+        is_system: true,
+        config: { theme: tpl.theme, scenes: tpl.scenes, rules: tpl.rules, export: tpl.export },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+    }
+
     const org = await OrgRepository.getUserOrg(userId);
-    if (!org) return [];
-    return TemplateRepository.findByOrgId(org.id);
+    const orgTemplates = org ? await TemplateRepository.findByOrgId(org.id) : [];
+    return [...systemTemplates, ...orgTemplates];
   },
 
   async get(templateId, userId) {
@@ -84,14 +46,35 @@ const TemplateService = {
     return template;
   },
 
+  async listSystem() {
+    return TemplateRepository.findSystemTemplates();
+  },
+
+  async getBySlug(slug) {
+    const template = await TemplateRepository.findBySlug(slug);
+    if (!template) throw new NotFoundError('System template not found');
+    if (typeof template.config === 'string') {
+      template.config = JSON.parse(template.config);
+    }
+    return template;
+  },
+
   async create(userId, { name, ruleType, config }) {
     if (!name) throw new ValidationError('Template name is required');
 
     const org = await OrgRepository.getUserOrg(userId);
     if (!org) throw new ValidationError('No organization found');
 
-    // If a rule type is provided, merge with default template
-    const templateConfig = config || DEFAULT_TEMPLATES[ruleType] || DEFAULT_TEMPLATES.podcast;
+    // If a rule type is provided, use matching system template config
+    let templateConfig = config;
+    if (!templateConfig && ruleType && SYSTEM_TEMPLATES[ruleType]) {
+      const tpl = SYSTEM_TEMPLATES[ruleType];
+      templateConfig = { theme: tpl.theme, scenes: tpl.scenes, rules: tpl.rules, export: tpl.export };
+    }
+    if (!templateConfig) {
+      const fallback = SYSTEM_TEMPLATES.podcast;
+      templateConfig = { theme: fallback.theme, scenes: fallback.scenes, rules: fallback.rules, export: fallback.export };
+    }
 
     return TemplateRepository.create({
       orgId: org.id,
@@ -107,6 +90,7 @@ const TemplateService = {
 
     const template = await TemplateRepository.findByIdAndOrg(templateId, org.id);
     if (!template) throw new NotFoundError('Template not found');
+    if (template.is_system) throw new ValidationError('System templates cannot be modified');
 
     return TemplateRepository.update(templateId, { name, config });
   },
@@ -117,12 +101,13 @@ const TemplateService = {
 
     const template = await TemplateRepository.findByIdAndOrg(templateId, org.id);
     if (!template) throw new NotFoundError('Template not found');
+    if (template.is_system) throw new ValidationError('System templates cannot be deleted');
 
     await TemplateRepository.delete(templateId);
   },
 
   getDefaultTemplates() {
-    return DEFAULT_TEMPLATES;
+    return SYSTEM_TEMPLATES;
   },
 };
 

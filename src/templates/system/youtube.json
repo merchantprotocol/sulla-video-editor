@@ -1,0 +1,33 @@
+{
+  "name": "YouTube",
+  "slug": "youtube",
+  "description": "Full-featured template for YouTube creators. Multi-scene layout with title cards, picture-in-picture, B-roll inserts, caption focus segments, and automatic clip generation for Shorts.",
+  "theme": {
+    "accentColor": "#e5534b",
+    "background": "dark",
+    "fontFamily": "Inter",
+    "captionStyle": "highlight"
+  },
+  "scenes": [
+    { "type": "TitleCard", "duration": 3, "transitionIn": "fade" },
+    { "type": "FullFrame", "transitionIn": "cut" },
+    { "type": "PiP", "pipPosition": "bottom-right", "pipSize": 140, "pipShape": "rounded" },
+    { "type": "BRoll", "transitionIn": "crossfade" },
+    { "type": "PiP" },
+    { "type": "CaptionFocus" },
+    { "type": "TitleCard", "duration": 8, "transitionIn": "crossfade", "transitionOut": "fade" }
+  ],
+  "rules": {
+    "removeFillers": true,
+    "trimSilence": { "enabled": true, "thresholdMs": 1500 },
+    "studioSound": true,
+    "normalize": { "enabled": true, "targetLufs": -14 },
+    "autoCaptions": true,
+    "autoClips": true
+  },
+  "export": {
+    "defaultFormat": "16:9",
+    "defaultResolution": "1080p",
+    "defaultCodec": "h264"
+  }
+}

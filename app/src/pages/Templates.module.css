@@ -10,11 +10,14 @@
 
 .sbList { padding: 4px 6px 8px; display: flex; flex-direction: column; gap: 2px; }
 .sbItem { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; transition: all 0.1s; font-size: 12px; color: var(--text-secondary); }
+.sbItem > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sbItem:hover { background: var(--bg-elevated); }
 .selected { background: var(--accent-soft) !important; color: var(--accent) !important; font-weight: 500; }
 .sbDot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.sbCount { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+.sbCount { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
 .sbEmpty { padding: 12px 14px; font-size: 12px; color: var(--text-dim); }
+.sbGroupLabel { font-size: 9px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 10px 2px; }
+.sbBadge { font-size: 8px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--border); border-radius: 3px; margin-left: auto; flex-shrink: 0; }
 
 /* Create form */
 .createForm { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -79,3 +82,4 @@
 .pbSwatch { width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: all 0.1s; }
 .pbSwatch:hover { transform: scale(1.15); }
 .pbSwatchActive { border-color: var(--text-primary); }
+.pbDesc { font-size: 11px; color: var(--text-muted); font-style: italic; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

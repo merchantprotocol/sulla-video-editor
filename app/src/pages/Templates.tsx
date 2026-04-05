@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTemplates, type Template, type TemplateConfig } from '../hooks/useTemplates'
 import styles from './Templates.module.css'
 
@@ -27,8 +27,79 @@ export default function Templates() {
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState('podcast')
 
+  const systemTemplates = templates.filter(t => t.is_system)
+  const userTemplates = templates.filter(t => !t.is_system)
+
+  const [playing, setPlaying] = useState(false)
+  const [sceneElapsed, setSceneElapsed] = useState(0)
+  const playTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const selected = templates.find(t => t.id === selectedId) || templates[0] || null
   const config = selected?.config as TemplateConfig | undefined
+  const isSystem = selected?.is_system === true
+
+  const DEFAULT_SCENE_DURATION = 4
+
+  const sceneDuration = useCallback((idx: number) => {
+    if (!config) return DEFAULT_SCENE_DURATION
+    return config.scenes[idx]?.duration || DEFAULT_SCENE_DURATION
+  }, [config])
+
+  const totalDuration = config ? config.scenes.reduce((sum, s) => sum + (s.duration || DEFAULT_SCENE_DURATION), 0) : 0
+
+  // Compute global elapsed time from scene index + sceneElapsed
+  const globalElapsed = config ? config.scenes.slice(0, selectedScene).reduce((sum, s) => sum + (s.duration || DEFAULT_SCENE_DURATION), 0) + sceneElapsed : 0
+  const progressPercent = totalDuration > 0 ? (globalElapsed / totalDuration) * 100 : 0
+
+  // Playback tick
+  useEffect(() => {
+    if (!playing || !config) return
+    const TICK = 50
+    playTimer.current = setInterval(() => {
+      setSceneElapsed(prev => {
+        const dur = sceneDuration(selectedScene)
+        const next = prev + TICK / 1000
+        if (next >= dur) {
+          // Advance to next scene
+          setSelectedScene(si => {
+            const nextScene = si + 1
+            if (nextScene >= config.scenes.length) {
+              // Loop back to start
+              setPlaying(false)
+              return 0
+            }
+            return nextScene
+          })
+          return 0
+        }
+        return next
+      })
+    }, TICK)
+    return () => { if (playTimer.current) clearInterval(playTimer.current) }
+  }, [playing, config, selectedScene, sceneDuration])
+
+  // Stop playback when template changes
+  useEffect(() => {
+    setPlaying(false)
+    setSelectedScene(0)
+    setSceneElapsed(0)
+  }, [selected?.id])
+
+  function togglePlay() {
+    if (!config) return
+    if (playing) {
+      setPlaying(false)
+    } else {
+      setSceneElapsed(0)
+      setPlaying(true)
+    }
+  }
+
+  function handleSceneClick(idx: number) {
+    setPlaying(false)
+    setSelectedScene(idx)
+    setSceneElapsed(0)
+  }
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -95,13 +166,33 @@ export default function Templates() {
             ) : templates.length === 0 ? (
               <div className={styles.sbEmpty}>No templates yet</div>
             ) : (
-              templates.map(t => (
-                <div key={t.id} className={`${styles.sbItem} ${selected?.id === t.id ? styles.selected : ''}`} onClick={() => { setSelectedId(t.id); setSelectedScene(0); }}>
-                  <div className={styles.sbDot} style={{ background: (t.config as TemplateConfig)?.theme?.accentColor || '#3a7f9e' }} />
-                  <span>{t.name}</span>
-                  <span className={styles.sbCount}>{(t.config as TemplateConfig)?.scenes?.length || 0}</span>
-                </div>
-              ))
+              <>
+                {systemTemplates.length > 0 && (
+                  <>
+                    <div className={styles.sbGroupLabel}>System</div>
+                    {systemTemplates.map(t => (
+                      <div key={t.id} className={`${styles.sbItem} ${selected?.id === t.id ? styles.selected : ''}`} onClick={() => { setSelectedId(t.id); setSelectedScene(0); setPlaying(false); setSceneElapsed(0); }}>
+                        <div className={styles.sbDot} style={{ background: (t.config as TemplateConfig)?.theme?.accentColor || '#3a7f9e' }} />
+                        <span>{t.name}</span>
+                        <span className={styles.sbBadge}>system</span>
+                        <span className={styles.sbCount}>{(t.config as TemplateConfig)?.scenes?.length || 0}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {userTemplates.length > 0 && (
+                  <>
+                    {systemTemplates.length > 0 && <div className={styles.sbGroupLabel}>Custom</div>}
+                    {userTemplates.map(t => (
+                      <div key={t.id} className={`${styles.sbItem} ${selected?.id === t.id ? styles.selected : ''}`} onClick={() => { setSelectedId(t.id); setSelectedScene(0); setPlaying(false); setSceneElapsed(0); }}>
+                        <div className={styles.sbDot} style={{ background: (t.config as TemplateConfig)?.theme?.accentColor || '#3a7f9e' }} />
+                        <span>{t.name}</span>
+                        <span className={styles.sbCount}>{(t.config as TemplateConfig)?.scenes?.length || 0}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -115,24 +206,26 @@ export default function Templates() {
             </div>
             <div className={styles.scenesList}>
               {config.scenes.map((s, i) => (
-                <div key={i} className={`${styles.sceneItem} ${selectedScene === i ? styles.selected : ''}`} onClick={() => setSelectedScene(i)}>
+                <div key={i} className={`${styles.sceneItem} ${selectedScene === i ? styles.selected : ''}`} onClick={() => handleSceneClick(i)}>
                   <div className={`${styles.sceneNum} ${selectedScene === i ? styles.activeNum : ''}`} style={selectedScene === i ? { background: sceneTypeColors[s.type] || '#3a7f9e' } : {}}>{i + 1}</div>
                   <div className={styles.sceneInfo}>
                     <div className={styles.sceneName}>{s.type}</div>
                     <div className={styles.sceneType}>{s.duration ? `${s.duration}s` : ''} {s.pipPosition || ''}</div>
                   </div>
-                  {config.scenes.length > 1 && (
+                  {!isSystem && config.scenes.length > 1 && (
                     <button className={styles.sceneRemove} onClick={e => { e.stopPropagation(); handleRemoveScene(i); }}>×</button>
                   )}
                 </div>
               ))}
-              <div className={styles.addSceneRow}>
-                {['TitleCard', 'FullFrame', 'PiP', 'BRoll'].map(type => (
-                  <button key={type} className={styles.addSceneBtn} onClick={() => handleAddScene(type)} style={{ borderColor: sceneTypeColors[type] + '40', color: sceneTypeColors[type] }}>
-                    + {type}
-                  </button>
-                ))}
-              </div>
+              {!isSystem && (
+                <div className={styles.addSceneRow}>
+                  {['TitleCard', 'FullFrame', 'PiP', 'BRoll'].map(type => (
+                    <button key={type} className={styles.addSceneBtn} onClick={() => handleAddScene(type)} style={{ borderColor: sceneTypeColors[type] + '40', color: sceneTypeColors[type] }}>
+                      + {type}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -182,6 +275,12 @@ export default function Templates() {
       <div className={styles.propsBar}>
         {selected && config && config.scenes[selectedScene] ? (
           <>
+            {isSystem && selected.description && (
+              <div className={styles.pbGroup}>
+                <span className={styles.pbDesc}>{selected.description}</span>
+              </div>
+            )}
+
             <div className={styles.pbGroup}>
               <span className={styles.pbLabel}>Scene</span>
               <span className={styles.pbValue}>{config.scenes[selectedScene].type}</span>
@@ -190,8 +289,14 @@ export default function Templates() {
             {config.scenes[selectedScene].duration !== undefined && (
               <div className={styles.pbGroup}>
                 <span className={styles.pbLabel}>Duration</span>
-                <input className={styles.pbInput} value={config.scenes[selectedScene].duration} onChange={e => handleUpdateScene(selectedScene, { duration: parseInt(e.target.value) || 0 })} style={{ width: 40 }} />
-                <span className={styles.pbUnit}>s</span>
+                {isSystem ? (
+                  <span className={styles.pbValue}>{config.scenes[selectedScene].duration}s</span>
+                ) : (
+                  <>
+                    <input className={styles.pbInput} value={config.scenes[selectedScene].duration} onChange={e => handleUpdateScene(selectedScene, { duration: parseInt(e.target.value) || 0 })} style={{ width: 40 }} />
+                    <span className={styles.pbUnit}>s</span>
+                  </>
+                )}
               </div>
             )}
 
@@ -199,30 +304,47 @@ export default function Templates() {
               <>
                 <div className={styles.pbGroup}>
                   <span className={styles.pbLabel}>Position</span>
-                  <select className={styles.pbSelect} value={config.scenes[selectedScene].pipPosition || 'bottom-right'} onChange={e => handleUpdateScene(selectedScene, { pipPosition: e.target.value })}>
-                    <option value="bottom-right">Bottom Right</option>
-                    <option value="bottom-left">Bottom Left</option>
-                    <option value="top-right">Top Right</option>
-                    <option value="top-left">Top Left</option>
-                  </select>
+                  {isSystem ? (
+                    <span className={styles.pbValue}>{config.scenes[selectedScene].pipPosition || 'bottom-right'}</span>
+                  ) : (
+                    <select className={styles.pbSelect} value={config.scenes[selectedScene].pipPosition || 'bottom-right'} onChange={e => handleUpdateScene(selectedScene, { pipPosition: e.target.value })}>
+                      <option value="bottom-right">Bottom Right</option>
+                      <option value="bottom-left">Bottom Left</option>
+                      <option value="top-right">Top Right</option>
+                      <option value="top-left">Top Left</option>
+                    </select>
+                  )}
                 </div>
                 <div className={styles.pbGroup}>
                   <span className={styles.pbLabel}>Shape</span>
-                  <select className={styles.pbSelect} value={config.scenes[selectedScene].pipShape || 'circle'} onChange={e => handleUpdateScene(selectedScene, { pipShape: e.target.value })}>
-                    <option value="circle">Circle</option>
-                    <option value="rounded">Rounded</option>
-                    <option value="square">Square</option>
-                  </select>
+                  {isSystem ? (
+                    <span className={styles.pbValue}>{config.scenes[selectedScene].pipShape || 'circle'}</span>
+                  ) : (
+                    <select className={styles.pbSelect} value={config.scenes[selectedScene].pipShape || 'circle'} onChange={e => handleUpdateScene(selectedScene, { pipShape: e.target.value })}>
+                      <option value="circle">Circle</option>
+                      <option value="rounded">Rounded</option>
+                      <option value="square">Square</option>
+                    </select>
+                  )}
                 </div>
               </>
             )}
 
-            <div className={styles.pbGroup}>
-              <span className={styles.pbLabel}>Accent</span>
-              {['#3a7f9e', '#cf222e', '#1a7f37', '#7c3aed', '#9a6700', '#f0883e'].map(c => (
-                <div key={c} className={`${styles.pbSwatch} ${config.theme.accentColor === c ? styles.pbSwatchActive : ''}`} style={{ background: c }} onClick={() => handleUpdateTheme({ accentColor: c })} />
-              ))}
-            </div>
+            {!isSystem && (
+              <div className={styles.pbGroup}>
+                <span className={styles.pbLabel}>Accent</span>
+                {['#3a7f9e', '#cf222e', '#1a7f37', '#7c3aed', '#9a6700', '#f0883e'].map(c => (
+                  <div key={c} className={`${styles.pbSwatch} ${config.theme.accentColor === c ? styles.pbSwatchActive : ''}`} style={{ background: c }} onClick={() => handleUpdateTheme({ accentColor: c })} />
+                ))}
+              </div>
+            )}
+
+            {isSystem && (
+              <div className={styles.pbGroup}>
+                <span className={styles.pbLabel}>Format</span>
+                <span className={styles.pbValue}>{config.export.defaultFormat} {config.export.defaultResolution}</span>
+              </div>
+            )}
           </>
         ) : (
           <span className={styles.propsEmpty}>Select a scene to edit properties</span>

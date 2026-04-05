@@ -1,0 +1,29 @@
+{
+  "name": "Interview",
+  "slug": "interview",
+  "description": "Designed for two-person interviews and conversations. Side-by-side and full-frame layouts with studio audio enhancement, filler removal, and bold captions.",
+  "theme": {
+    "accentColor": "#d29922",
+    "background": "dark",
+    "fontFamily": "Inter",
+    "captionStyle": "bold"
+  },
+  "scenes": [
+    { "type": "TitleCard", "duration": 4 },
+    { "type": "SideBySide" },
+    { "type": "FullFrame" },
+    { "type": "TitleCard", "duration": 5 }
+  ],
+  "rules": {
+    "removeFillers": true,
+    "trimSilence": { "enabled": true, "thresholdMs": 1500 },
+    "studioSound": true,
+    "normalize": { "enabled": true, "targetLufs": -14 },
+    "autoCaptions": true
+  },
+  "export": {
+    "defaultFormat": "16:9",
+    "defaultResolution": "1080p",
+    "defaultCodec": "h264"
+  }
+}

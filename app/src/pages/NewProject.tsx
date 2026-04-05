@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
+import { chunkedUpload, formatBytes } from '../lib/chunkedUpload'
 import styles from './NewProject.module.css'
 
 const ruleTemplates = [
@@ -19,7 +20,9 @@ export default function NewProject() {
   const [projectName, setProjectName] = useState('')
   const [creating, setCreating] = useState(false)
   const [progress, setProgress] = useState('')
+  const [uploadPercent, setUploadPercent] = useState(0)
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -46,6 +49,10 @@ export default function NewProject() {
     if (!projectName) { setError('Enter a project name'); return }
     setError('')
     setCreating(true)
+    setUploadPercent(0)
+
+    const abort = new AbortController()
+    abortRef.current = abort
 
     try {
       const token = localStorage.getItem('sulla_token')
@@ -60,40 +67,35 @@ export default function NewProject() {
         method: 'POST',
         headers,
         body: JSON.stringify({ name: projectName, rule_template: selectedRule }),
+        signal: abort.signal,
       })
       if (!createRes.ok) throw new Error((await createRes.json()).error)
       const { project } = await createRes.json()
 
-      // 2. Upload media (if file selected)
+      // 2. Upload media via chunked upload (if file selected)
       if (file) {
         setProgress(`Uploading ${file.name}...`)
-        const uploadRes = await fetch(`/api/projects/${project.id}/import`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/octet-stream',
-            'X-Filename': file.name,
-          },
-          body: file,
-        })
-        if (!uploadRes.ok) throw new Error((await uploadRes.json()).error)
-
-        // 3. Transcribe
-        setProgress('Transcribing audio...')
-        const transcribeRes = await fetch(`/api/projects/${project.id}/transcribe`, {
-          method: 'POST',
-          headers,
-        })
-        if (!transcribeRes.ok) {
-          // Non-fatal — user can transcribe later
-          console.warn('Transcription failed, continuing')
-        }
+        await chunkedUpload(project.id, file, (p) => {
+          setUploadPercent(p.percent)
+          if (p.phase === 'uploading') {
+            setProgress(`Uploading... ${p.percent}% (${formatBytes(p.bytesUploaded)} / ${formatBytes(p.totalBytes)})`)
+          } else {
+            setProgress('Processing media...')
+          }
+        }, abort.signal)
       }
 
       navigate(`/editor/${project.id}`)
     } catch (err: any) {
-      setError(err.message || 'Failed to create project')
+      if (err.name === 'AbortError') {
+        setProgress('')
+        setError('Upload cancelled')
+      } else {
+        setError(err.message || 'Failed to create project')
+      }
       setCreating(false)
+    } finally {
+      abortRef.current = null
     }
   }
 
@@ -170,12 +172,26 @@ export default function NewProject() {
 
         {error && <div className={styles.error}>{error}</div>}
 
+        {/* Upload progress bar */}
+        {creating && uploadPercent > 0 && (
+          <div className={styles.uploadProgress}>
+            <div className={styles.uploadBar}>
+              <div className={styles.uploadFill} style={{ width: `${uploadPercent}%` }} />
+            </div>
+            <div className={styles.uploadLabel}>{progress}</div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={() => navigate('/')}>Cancel</button>
+          {creating ? (
+            <button className={styles.cancelBtn} onClick={() => abortRef.current?.abort()}>Cancel Upload</button>
+          ) : (
+            <button className={styles.cancelBtn} onClick={() => navigate('/')}>Cancel</button>
+          )}
           <button className={styles.createBtn} onClick={handleCreate} disabled={creating || !projectName}>
             {creating ? (
-              <>{progress}</>
+              <>{uploadPercent === 0 ? progress : 'Uploading...'}</>
             ) : (
               <>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>

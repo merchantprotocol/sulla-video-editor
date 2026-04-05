@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const ProjectController = require('../controllers/project.controller');
+const UploadController = require('../controllers/upload.controller');
 
 const router = express.Router();
 
@@ -19,6 +20,12 @@ router.get('/:id/edl', ProjectController.getEdl);
 router.put('/:id/edl', ProjectController.saveEdl);
 router.get('/:id/suggestions', ProjectController.getSuggestions);
 router.get('/:id/exports', ProjectController.getExports);
+
+// Chunked upload
+router.post('/:id/upload/init', UploadController.init);
+router.post('/:id/upload/chunk', UploadController.chunk);
+router.get('/:id/upload/status', UploadController.status);
+router.post('/:id/upload/complete', UploadController.complete);
 
 router.get('/:id/media/:filename', ProjectController.serveMedia);
 router.get('/:id/media/thumbnails/:filename', ProjectController.serveThumbnail);

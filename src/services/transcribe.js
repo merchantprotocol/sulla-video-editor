@@ -1,7 +1,8 @@
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs/promises');
 const path = require('path');
+const { EventEmitter } = require('events');
 
 const exec = promisify(execFile);
 
@@ -38,6 +39,61 @@ async function transcribe(audioPath) {
   await fs.unlink(jsonPath).catch(() => {});
 
   return transcript;
+}
+
+/**
+ * Run whisper.cpp with progress events streamed back via an EventEmitter.
+ * Emits: 'progress' (number 0-100), 'done' (transcript), 'error' (Error)
+ */
+function transcribeWithProgress(audioPath) {
+  const emitter = new EventEmitter();
+  const outputBase = audioPath.replace(/\.\w+$/, '');
+
+  const proc = spawn(WHISPER_CLI, [
+    '-m', WHISPER_MODEL,
+    '-f', audioPath,
+    '-oj',
+    '-ml', '1',
+    '-pp',
+    '-of', outputBase,
+  ], { timeout: 600000 });
+
+  let stderrBuf = '';
+
+  proc.stderr.on('data', (chunk) => {
+    stderrBuf += chunk.toString();
+    // whisper.cpp prints: "whisper_print_progress_callback: progress =  42%"
+    const matches = stderrBuf.match(/progress\s*=\s*(\d+)%/g);
+    if (matches) {
+      const last = matches[matches.length - 1];
+      const pct = parseInt(last.match(/(\d+)%/)[1], 10);
+      emitter.emit('progress', pct);
+    }
+  });
+
+  proc.on('close', async (code) => {
+    if (code !== 0) {
+      emitter.emit('error', new Error(`whisper-cli exited with code ${code}: ${stderrBuf}`));
+      return;
+    }
+
+    try {
+      const jsonPath = `${outputBase}.json`;
+      const raw = await fs.readFile(jsonPath, 'utf-8');
+      const whisperOutput = JSON.parse(raw);
+      const transcript = transformWhisperOutput(whisperOutput);
+      await fs.unlink(jsonPath).catch(() => {});
+      emitter.emit('done', transcript);
+    } catch (err) {
+      emitter.emit('error', err);
+    }
+  });
+
+  proc.on('error', (err) => {
+    emitter.emit('error', err);
+  });
+
+  return emitter;
 }
 
 /**
@@ -124,4 +180,4 @@ function transformWhisperOutput(whisperOutput) {
   };
 }
 
-module.exports = { transcribe, transformWhisperOutput };
+module.exports = { transcribe, transcribeWithProgress, transformWhisperOutput };

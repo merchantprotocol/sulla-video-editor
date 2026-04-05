@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "cuts": [
+    {
+      "type": "remove",
+      "start_ms": 10640,
+      "end_ms": 11360,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 17390,
+      "end_ms": 17480,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 23260,
+      "end_ms": 24000,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 29720,
+      "end_ms": 30020,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 30700,
+      "end_ms": 31140,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 43440,
+      "end_ms": 43880,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 45050,
+      "end_ms": 45360,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 47430,
+      "end_ms": 47800,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 56560,
+      "end_ms": 57010,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 76170,
+      "end_ms": 76360,
+      "reason": "filler"
+    }
+  ]
+}

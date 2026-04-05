@@ -8,6 +8,8 @@ router.use(requireAuth);
 
 router.get('/', TemplateController.list);
 router.get('/defaults', TemplateController.defaults);
+router.get('/system', TemplateController.listSystem);
+router.get('/system/:slug', TemplateController.getBySlug);
 router.post('/', TemplateController.create);
 router.get('/:id', TemplateController.get);
 router.put('/:id', TemplateController.update);

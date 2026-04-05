@@ -1,0 +1,29 @@
+{
+  "name": "Podcast",
+  "slug": "podcast",
+  "description": "Optimized for long-form audio and video podcasts. Includes filler-word removal, silence trimming, studio-quality audio enhancement, and automatic captions.",
+  "theme": {
+    "accentColor": "#5096b3",
+    "background": "dark",
+    "fontFamily": "Inter",
+    "captionStyle": "bold"
+  },
+  "scenes": [
+    { "type": "TitleCard", "duration": 4, "transitionIn": "fade", "transitionOut": "crossfade" },
+    { "type": "PiP", "pipPosition": "bottom-right", "pipSize": 120, "pipShape": "circle" },
+    { "type": "TitleCard", "duration": 6, "transitionIn": "crossfade", "transitionOut": "fade" }
+  ],
+  "rules": {
+    "removeFillers": true,
+    "trimSilence": { "enabled": true, "thresholdMs": 1500 },
+    "studioSound": true,
+    "normalize": { "enabled": true, "targetLufs": -14 },
+    "autoCaptions": true,
+    "autoClips": false
+  },
+  "export": {
+    "defaultFormat": "16:9",
+    "defaultResolution": "1080p",
+    "defaultCodec": "h264"
+  }
+}

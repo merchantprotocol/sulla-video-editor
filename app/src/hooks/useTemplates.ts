@@ -28,6 +28,9 @@ export interface TemplateConfig {
 export interface Template {
   id: string
   name: string
+  slug?: string
+  description?: string
+  is_system?: boolean
   config: TemplateConfig
   created_at: string
   updated_at: string
