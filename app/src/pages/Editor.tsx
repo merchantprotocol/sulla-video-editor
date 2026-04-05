@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useProject } from '../hooks/useProjects'
 import { useEditor } from '../hooks/useEditor'
@@ -17,6 +17,7 @@ interface Transcript { speakers: { id: string; name: string; color: string }[]; 
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { project, files, tracks, setTracks, loading, transcribe, getTranscript, saveEdl, getEdl, getOverlays, saveOverlays, saveTracks, renderVideo, getWaveform } = useProject(id!)
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
@@ -1131,6 +1132,12 @@ export default function Editor() {
 
         {saving && <span className={styles.savingLabel}>Saving...</span>}
 
+        {project?.template_id && (
+          <button className={styles.topBtn} onClick={() => navigate(`/templates/${project.template_id}`)} style={{ background: 'none', border: '1px solid var(--border-visible)', color: 'var(--text-secondary)' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Layout
+          </button>
+        )}
         <button className={styles.topBtn} onClick={() => setExportOpen(true)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export

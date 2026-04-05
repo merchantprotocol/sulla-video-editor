@@ -7,6 +7,7 @@ import Welcome from './pages/Welcome'
 import NewProject from './pages/NewProject'
 import Editor from './pages/Editor'
 import Templates from './pages/Templates'
+import TemplateEditor from './pages/TemplateEditor'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 
@@ -53,6 +54,7 @@ function AppShell() {
   return (
     <Routes>
       <Route path="/editor/:id" element={<Editor />} />
+      <Route path="/templates/:id" element={<TemplateEditor />} />
       <Route element={<Layout />}>
         <Route index element={<Welcome />} />
         <Route path="new" element={<NewProject />} />
