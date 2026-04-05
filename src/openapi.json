@@ -1,0 +1,399 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sulla Video Editor API",
+    "version": "0.1.0",
+    "description": "AI-driven video editor API — video editing as code"
+  },
+  "servers": [
+    { "url": "/api", "description": "Local / Docker" }
+  ],
+  "security": [
+    { "bearerAuth": [] },
+    { "cookieAuth": [] }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "JWT token or SULLA_API_KEY" },
+      "cookieAuth": { "type": "apiKey", "in": "cookie", "name": "sulla_token" }
+    },
+    "schemas": {
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "editing", "exported"] },
+          "rule_template": { "type": "string", "nullable": true },
+          "template_id": { "type": "string", "format": "uuid", "nullable": true },
+          "template_config": { "type": "object", "nullable": true },
+          "duration_ms": { "type": "integer", "nullable": true },
+          "resolution": { "type": "string", "nullable": true },
+          "file_size": { "type": "integer", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Template": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "slug": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "is_system": { "type": "boolean" },
+          "config": { "type": "object" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "avatar_url": { "type": "string", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Org": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "OrgMember": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["owner", "admin", "member"] },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "OrgInvite": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "member"] },
+          "invited_by": { "type": "string", "format": "uuid" },
+          "accepted_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Track": {
+        "type": "object",
+        "properties": {
+          "index": { "type": "integer" },
+          "type": { "type": "string", "enum": ["video", "audio", "subtitle", "data"] },
+          "codec": { "type": "string" },
+          "label": { "type": "string", "nullable": true },
+          "duration_ms": { "type": "integer" },
+          "width": { "type": "integer" },
+          "height": { "type": "integer" },
+          "channels": { "type": "integer" },
+          "sample_rate": { "type": "integer" }
+        }
+      },
+      "Edl": {
+        "type": "object",
+        "properties": {
+          "version": { "type": "integer" },
+          "cuts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "enum": ["remove"] },
+                "start_ms": { "type": "integer" },
+                "end_ms": { "type": "integer" },
+                "reason": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "Transcript": {
+        "type": "object",
+        "properties": {
+          "speakers": { "type": "array", "items": { "type": "object" } },
+          "words": { "type": "array", "items": { "type": "object" } },
+          "silences": { "type": "array", "items": { "type": "object" } },
+          "duration_ms": { "type": "integer" },
+          "word_count": { "type": "integer" }
+        }
+      },
+      "RenderResult": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "size": { "type": "integer" },
+          "format": { "type": "string" },
+          "resolution": { "type": "string" },
+          "cuts_applied": { "type": "integer" },
+          "original_duration_ms": { "type": "integer" },
+          "edited_duration_ms": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "security": [],
+        "responses": { "200": { "description": "Service status" } }
+      }
+    },
+    "/onboarded": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Check if app is onboarded",
+        "security": [],
+        "responses": { "200": { "description": "Onboarding status" } }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user and organization",
+        "security": [],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["name", "email", "password", "org_name"], "properties": { "name": { "type": "string" }, "email": { "type": "string" }, "password": { "type": "string" }, "org_name": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "User created" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "security": [],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string" }, "password": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "JWT token + user" } }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user profile",
+        "responses": { "200": { "description": "Current user + orgs" } }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "List all users",
+        "responses": { "200": { "description": "Array of users", "content": { "application/json": { "schema": { "type": "object", "properties": { "users": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } } } } } }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get user by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "User + orgs" } }
+      },
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update user profile",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "email": { "type": "string" }, "avatar_url": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Updated user" } }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Delete a user",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/users/{id}/password": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Change user password",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["password"], "properties": { "password": { "type": "string", "minLength": 6 } } } } } },
+        "responses": { "200": { "description": "Password updated" } }
+      }
+    },
+    "/orgs/{orgId}": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get organization",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Organization details" } }
+      },
+      "put": {
+        "tags": ["Organizations"],
+        "summary": "Update organization",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "slug": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Updated org" } }
+      }
+    },
+    "/orgs/{orgId}/members": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "List org members",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Array of members" } }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Add member to org",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["user_id"], "properties": { "user_id": { "type": "string", "format": "uuid" }, "role": { "type": "string", "enum": ["owner", "admin", "member"] } } } } } },
+        "responses": { "200": { "description": "Member added" } }
+      }
+    },
+    "/orgs/{orgId}/members/{userId}": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get member details",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }, { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Member details" } }
+      },
+      "put": {
+        "tags": ["Organizations"],
+        "summary": "Update member role",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }, { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["role"], "properties": { "role": { "type": "string", "enum": ["owner", "admin", "member"] } } } } } },
+        "responses": { "200": { "description": "Role updated" } }
+      },
+      "delete": {
+        "tags": ["Organizations"],
+        "summary": "Remove member from org",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }, { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Member removed" } }
+      }
+    },
+    "/orgs/{orgId}/invites": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "List pending invites",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Array of invites" } }
+      },
+      "post": {
+        "tags": ["Organizations"],
+        "summary": "Create invite",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["email"], "properties": { "email": { "type": "string" }, "role": { "type": "string", "enum": ["admin", "member"] } } } } } },
+        "responses": { "200": { "description": "Invite created" } }
+      }
+    },
+    "/orgs/{orgId}/invites/{inviteId}": {
+      "delete": {
+        "tags": ["Organizations"],
+        "summary": "Revoke invite",
+        "parameters": [{ "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }, { "name": "inviteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Invite revoked" } }
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "List all projects",
+        "responses": { "200": { "description": "Array of projects" } }
+      },
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Create a project",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "rule_template": { "type": "string" }, "template_id": { "type": "string", "format": "uuid" } } } } } },
+        "responses": { "200": { "description": "Created project" } }
+      }
+    },
+    "/projects/{id}": {
+      "get": { "tags": ["Projects"], "summary": "Get project + tracks + files", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Project details" } } },
+      "put": { "tags": ["Projects"], "summary": "Update project metadata", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Updated" } } },
+      "delete": { "tags": ["Projects"], "summary": "Delete project + storage", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/projects/{id}/import": {
+      "post": { "tags": ["Projects"], "summary": "Import media (streaming upload)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Media metadata" } } }
+    },
+    "/projects/{id}/upload/init": {
+      "post": { "tags": ["Projects"], "summary": "Initialize chunked upload", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "filename": { "type": "string" }, "fileSize": { "type": "integer" }, "chunkSize": { "type": "integer" } } } } } }, "responses": { "200": { "description": "Upload session" } } }
+    },
+    "/projects/{id}/upload/chunk": {
+      "post": { "tags": ["Projects"], "summary": "Upload a chunk", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Chunk received" } } }
+    },
+    "/projects/{id}/upload/status": {
+      "get": { "tags": ["Projects"], "summary": "Check upload progress", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Upload status" } } }
+    },
+    "/projects/{id}/upload/complete": {
+      "post": { "tags": ["Projects"], "summary": "Finalize chunked upload", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Import result" } } }
+    },
+    "/projects/{id}/transcribe": {
+      "post": { "tags": ["Projects"], "summary": "Transcribe media (SSE stream)", "description": "Returns Server-Sent Events: {type:'progress',progress:N}, {type:'done',...}, {type:'error',...}", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "SSE stream", "content": { "text/event-stream": {} } } } }
+    },
+    "/projects/{id}/transcript": {
+      "get": { "tags": ["Projects"], "summary": "Get transcript", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Transcript JSON" } } },
+      "put": { "tags": ["Projects"], "summary": "Save edited transcript", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Saved" } } }
+    },
+    "/projects/{id}/edl": {
+      "get": { "tags": ["Projects"], "summary": "Get Edit Decision List", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "EDL JSON" } } },
+      "put": { "tags": ["Projects"], "summary": "Save EDL", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Saved" } } }
+    },
+    "/projects/{id}/suggestions": {
+      "get": { "tags": ["Projects"], "summary": "Get AI editing suggestions", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Suggestions" } } }
+    },
+    "/projects/{id}/exports": {
+      "get": { "tags": ["Projects"], "summary": "List exported files", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Export list" } } }
+    },
+    "/projects/{id}/render": {
+      "post": { "tags": ["Rendering"], "summary": "Render project (blocking)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "format": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:5"] }, "resolution": { "type": "string", "enum": ["720p", "1080p", "4k"] }, "codec": { "type": "string" }, "quality": { "type": "string", "enum": ["high", "medium", "low"] } } } } } }, "responses": { "200": { "description": "Render result" } } }
+    },
+    "/projects/{id}/render/stream": {
+      "post": { "tags": ["Rendering"], "summary": "Render project (SSE progress stream)", "description": "Returns Server-Sent Events: {type:'progress',progress:N}, {type:'done',...}, {type:'error',...}", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "format": { "type": "string" }, "resolution": { "type": "string" }, "codec": { "type": "string" }, "quality": { "type": "string" } } } } } }, "responses": { "200": { "description": "SSE stream", "content": { "text/event-stream": {} } } } }
+    },
+    "/projects/{id}/clips": {
+      "post": { "tags": ["Rendering"], "summary": "Render a social clip", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["start_ms", "end_ms"], "properties": { "start_ms": { "type": "integer" }, "end_ms": { "type": "integer" }, "format": { "type": "string" }, "resolution": { "type": "string" } } } } } }, "responses": { "200": { "description": "Clip result" } } }
+    },
+    "/projects/{id}/exports/{filename}": {
+      "get": { "tags": ["Rendering"], "summary": "Download exported file", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }, { "name": "filename", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "File download" } } }
+    },
+    "/templates": {
+      "get": { "tags": ["Templates"], "summary": "List all templates (system + custom)", "responses": { "200": { "description": "Array of templates" } } },
+      "post": { "tags": ["Templates"], "summary": "Create custom template", "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "rule_type": { "type": "string" }, "config": { "type": "object" } } } } } }, "responses": { "200": { "description": "Created template" } } }
+    },
+    "/templates/defaults": {
+      "get": { "tags": ["Templates"], "summary": "Get default template configs", "responses": { "200": { "description": "Default configs keyed by slug" } } }
+    },
+    "/templates/system": {
+      "get": { "tags": ["Templates"], "summary": "List system templates", "responses": { "200": { "description": "System templates" } } }
+    },
+    "/templates/system/{slug}": {
+      "get": { "tags": ["Templates"], "summary": "Get system template by slug", "parameters": [{ "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "System template" } } }
+    },
+    "/templates/{id}": {
+      "get": { "tags": ["Templates"], "summary": "Get template by ID", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Template" } } },
+      "put": { "tags": ["Templates"], "summary": "Update template", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Updated" } } },
+      "delete": { "tags": ["Templates"], "summary": "Delete template", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/compose/quick": {
+      "post": { "tags": ["Composition"], "summary": "Quick compose — create project + render slides", "responses": { "200": { "description": "Compose result" } } }
+    },
+    "/compose/react": {
+      "post": { "tags": ["Composition"], "summary": "Render React composition to video", "responses": { "200": { "description": "Compose result" } } }
+    },
+    "/projects/{id}/compose": {
+      "post": { "tags": ["Composition"], "summary": "Compose slides in existing project", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "Compose result" } } }
+    }
+  },
+  "tags": [
+    { "name": "System", "description": "Health and status" },
+    { "name": "Auth", "description": "Authentication and registration" },
+    { "name": "Users", "description": "User management" },
+    { "name": "Organizations", "description": "Organization, member, and invite management" },
+    { "name": "Projects", "description": "Project CRUD, media, transcription, EDL" },
+    { "name": "Templates", "description": "System and custom editing templates" },
+    { "name": "Rendering", "description": "Video rendering and export" },
+    { "name": "Composition", "description": "Slide and React composition rendering" }
+  ]
+}

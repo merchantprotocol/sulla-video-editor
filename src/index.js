@@ -36,10 +36,18 @@ app.get('/api/onboarded', AuthController.onboarded);
 // ─── Routes ─────────────────────────────────────────────────
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/orgs', require('./routes/orgs'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/projects', require('./routes/render'));
 app.use('/api/templates', require('./routes/templates'));
 app.use('/api', require('./routes/compose'));
+
+// ─── OpenAPI spec ───────────────────────────────────────────
+
+app.get('/api/openapi.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'openapi.json'));
+});
 
 // ─── Static files + SPA fallback ────────────────────────────
 

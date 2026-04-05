@@ -56,8 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const savedOrgId = localStorage.getItem('sulla_org')
             const org = (data.orgs || []).find((o: Org) => o.id === savedOrgId) || data.orgs?.[0]
             setCurrentOrg(org || null)
-          } catch {
-            localStorage.removeItem('sulla_token')
+          } catch (err: any) {
+            // Only clear token on auth failures (401), not transient network errors
+            if (err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+              localStorage.removeItem('sulla_token')
+            }
           }
         }
       }
