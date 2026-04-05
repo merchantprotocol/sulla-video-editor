@@ -13,6 +13,7 @@ app.use(requestId);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
+app.use(express.raw({ type: 'application/octet-stream', limit: '2gb' }));
 
 // ─── Health ─────────────────────────────────────────────────
 
