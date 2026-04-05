@@ -1,9 +1,10 @@
 const express = require('express');
 const path = require('path');
-const pool = require('./lib/db');
+const config = require('./utils/config');
+const errorHandler = require('./middleware/errorHandler');
+const AuthController = require('./controllers/auth.controller');
 
 const app = express();
-const PORT = 8081;
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -11,6 +12,7 @@ app.use(express.json({ limit: '10mb' }));
 // ─── Health ─────────────────────────────────────────────────
 
 app.get('/api/health', async (req, res) => {
+  const pool = require('./lib/db');
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok', service: 'sulla-video-editor', db: 'connected' });
@@ -19,17 +21,9 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ─── Onboarding state ───────────────────────────────────────
+// ─── Onboarding ─────────────────────────────────────────────
 
-app.get('/api/onboarded', async (req, res) => {
-  try {
-    const result = await pool.query("SELECT value FROM app_state WHERE key = 'onboarded'");
-    const onboarded = result.rows[0]?.value === 'true' || result.rows[0]?.value === true;
-    res.json({ onboarded });
-  } catch {
-    res.json({ onboarded: false });
-  }
-});
+app.get('/api/onboarded', AuthController.onboarded);
 
 // ─── Routes ─────────────────────────────────────────────────
 
@@ -46,8 +40,12 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+// ─── Error handler (must be last) ───────────────────────────
+
+app.use(errorHandler);
+
 // ─── Start ──────────────────────────────────────────────────
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`sulla-video-editor running on port ${PORT}`);
+app.listen(config.port, '0.0.0.0', () => {
+  console.log(`sulla-video-editor running on port ${config.port}`);
 });

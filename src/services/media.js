@@ -5,6 +5,13 @@ const fs = require('fs/promises');
 
 const exec = promisify(execFile);
 
+function parseFraction(str) {
+  if (!str) return 30;
+  const parts = str.split('/');
+  if (parts.length === 2) return parseInt(parts[0]) / parseInt(parts[1]);
+  return parseFloat(str) || 30;
+}
+
 /**
  * Extract metadata from a media file using ffprobe
  */
@@ -29,7 +36,7 @@ async function extractMetadata(filePath) {
   return {
     duration_ms: Math.round(durationSec * 1000),
     resolution: width && height ? `${width}x${height}` : null,
-    fps: videoStream ? eval(videoStream.r_frame_rate || '30') : null,
+    fps: videoStream ? parseFraction(videoStream.r_frame_rate || '30') : null,
     file_size: parseInt(format.size || 0),
     format: format.format_name,
     codec_video: videoStream?.codec_name,
