@@ -20,6 +20,7 @@ router.put('/:id/transcript', ProjectController.saveTranscript);
 router.get('/:id/edl', ProjectController.getEdl);
 router.put('/:id/edl', ProjectController.saveEdl);
 router.get('/:id/suggestions', ProjectController.getSuggestions);
+router.put('/:id/tracks', ProjectController.saveTracks);
 router.get('/:id/overlays', ProjectController.getOverlays);
 router.put('/:id/overlays', ProjectController.saveOverlays);
 router.get('/:id/exports', ProjectController.getExports);

@@ -346,6 +346,14 @@ const ProjectService = {
     return filePath;
   },
 
+  async saveTracks(projectId, userId, tracks) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+
+    const tracksPath = projectPath(projectId, 'data', 'tracks.json');
+    await fs.writeFile(tracksPath, JSON.stringify(tracks, null, 2));
+  },
+
   async getOverlays(projectId, userId) {
     const project = await ProjectRepository.findByIdAndUser(projectId, userId);
     if (!project) throw new NotFoundError('Project not found');

@@ -75,6 +75,7 @@ export interface Track {
   channels?: number
   channel_layout?: string
   sample_rate?: number
+  color?: string
 }
 
 export function useProject(id: string) {
@@ -176,9 +177,14 @@ export function useProject(id: string) {
     return api.post(`/projects/${id}/clips`, options)
   }
 
+  async function saveTracks(updatedTracks: Track[]) {
+    setTracks(updatedTracks)
+    return api.put(`/projects/${id}/tracks`, updatedTracks)
+  }
+
   async function getExports() {
     return api.get(`/projects/${id}/exports`)
   }
 
-  return { project, files, tracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, getOverlays, saveOverlays, renderVideo, renderClip, getExports }
+  return { project, files, tracks, setTracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, getOverlays, saveOverlays, saveTracks, renderVideo, renderClip, getExports }
 }

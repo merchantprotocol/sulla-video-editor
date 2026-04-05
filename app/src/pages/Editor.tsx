@@ -17,7 +17,7 @@ interface Transcript { speakers: { id: string; name: string; color: string }[]; 
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>()
-  const { project, files, tracks, loading, transcribe, getTranscript, saveEdl, getEdl, getOverlays, saveOverlays, renderVideo } = useProject(id!)
+  const { project, files, tracks, setTracks, loading, transcribe, getTranscript, saveEdl, getEdl, getOverlays, saveOverlays, saveTracks, renderVideo } = useProject(id!)
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -51,7 +51,9 @@ export default function Editor() {
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false)
   const [audioCollapsed, setAudioCollapsed] = useState(false)
   const [studioSoundApplied, setStudioSoundApplied] = useState(false)
+  const [studioSoundProgress, setStudioSoundProgress] = useState<number | null>(null) // null = idle, 0-100 = processing
   const [normalizeApplied, setNormalizeApplied] = useState(false)
+  const [normalizeProgress, setNormalizeProgress] = useState<number | null>(null)
   const [speakerMenuOpen, setSpeakerMenuOpen] = useState<number | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
@@ -251,11 +253,11 @@ export default function Editor() {
           if (count > 0) applied.push(`${count} pauses trimmed`)
         }
         if (rules.studioSound) {
-          setStudioSoundApplied(true)
+          handleStudioSound() // runs async in background
           applied.push('Studio Sound')
         }
         if (rules.normalize?.enabled) {
-          setNormalizeApplied(true)
+          handleNormalize() // runs async in background
           applied.push(`Normalized to ${rules.normalize.targetLufs} LUFS`)
         }
         if (applied.length > 0) {
@@ -284,6 +286,95 @@ export default function Editor() {
   function handleCleanAll() {
     handleRemoveFillers()
     setTimeout(() => handleTrimSilence(), 50)
+  }
+
+  // ─── Studio Sound (SSE streaming) ────────────────────────
+  async function handleStudioSound() {
+    if (studioSoundProgress !== null) return // already processing
+    setStudioSoundProgress(0)
+    toast('Applying Studio Sound...')
+
+    try {
+      const token = localStorage.getItem('sulla_token')
+      const res = await fetch(`/api/projects/${id}/studio-sound`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const msg = JSON.parse(line.slice(6))
+          if (msg.type === 'progress') setStudioSoundProgress(msg.progress)
+          else if (msg.type === 'done') {
+            setStudioSoundApplied(true)
+            setStudioSoundProgress(null)
+            toast('Studio Sound applied')
+          }
+          else if (msg.type === 'error') {
+            setStudioSoundProgress(null)
+            toast('Studio Sound failed: ' + msg.error)
+          }
+        }
+      }
+    } catch (err: any) {
+      setStudioSoundProgress(null)
+      toast('Studio Sound failed: ' + err.message)
+    }
+  }
+
+  async function handleNormalize() {
+    if (normalizeProgress !== null) return
+    setNormalizeProgress(0)
+    toast('Normalizing audio...')
+
+    try {
+      const token = localStorage.getItem('sulla_token')
+      const res = await fetch(`/api/projects/${id}/normalize`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const msg = JSON.parse(line.slice(6))
+          if (msg.type === 'progress') setNormalizeProgress(msg.progress)
+          else if (msg.type === 'done') {
+            setNormalizeApplied(true)
+            setNormalizeProgress(null)
+            toast('Audio normalized to -14 LUFS')
+          }
+          else if (msg.type === 'error') {
+            setNormalizeProgress(null)
+            toast('Normalization failed: ' + msg.error)
+          }
+        }
+      }
+    } catch (err: any) {
+      setNormalizeProgress(null)
+      toast('Normalization failed: ' + err.message)
+    }
   }
 
   // ─── Title editing ────────────────────────────────────────
@@ -438,17 +529,48 @@ export default function Editor() {
     } else if (action === 'rename') {
       toast(`Rename ${trackName}: coming soon`)
     } else if (action === 'duplicate') {
-      toast(`Duplicate ${trackName}: coming soon`)
+      const src = tracks.find(t => `track-${t.type}-${t.index}` === trackId)
+      if (src) {
+        const maxIdx = Math.max(...tracks.map(t => t.index), 0)
+        const dup = { ...src, index: maxIdx + 1, label: `${trackName} (copy)` }
+        saveTracks([...tracks, dup])
+        toast(`Duplicated ${trackName}`)
+      }
     } else if (action === 'delete') {
-      toast(`Delete ${trackName}: coming soon`)
+      saveTracks(tracks.filter(t => `track-${t.type}-${t.index}` !== trackId))
+      toast(`Deleted ${trackName}`)
     } else if (action === 'color') {
-      toast(`Change color: coming soon`)
+      const input = document.createElement('input')
+      input.type = 'color'
+      input.value = tracks.find(t => `track-${t.type}-${t.index}` === trackId)?.color || '#5096b3'
+      input.style.cssText = 'position:fixed;opacity:0;pointer-events:none;'
+      document.body.appendChild(input)
+      input.click()
+      input.addEventListener('input', () => {
+        saveTracks(tracks.map(t => `track-${t.type}-${t.index}` === trackId ? { ...t, color: input.value } : t))
+      })
+      input.addEventListener('change', () => document.body.removeChild(input))
     } else if (action === 'detachAudio') {
       toast('Detach audio: coming soon')
     } else if (action === 'addEffect') {
       toast('Add effect: coming soon')
     } else if (action === 'splitAtPlayhead') {
-      toast('Split at playhead: coming soon')
+      if (!transcript || durationSec <= 0) { toast('No transcript loaded'); return }
+      const splitMs = currentTime * 1000
+      const hitWord = transcript.words.find((w: any) => w.start * 1000 <= splitMs && w.end * 1000 >= splitMs)
+      if (hitWord) {
+        editor.addCut(Math.round(hitWord.start * 1000), Math.round(hitWord.end * 1000), 'split')
+        toast(`Split: cut "${hitWord.word}" at ${formatTime(currentTime)}`)
+      } else {
+        const before = [...transcript.words].reverse().find((w: any) => w.end * 1000 <= splitMs)
+        const after = transcript.words.find((w: any) => w.start * 1000 >= splitMs)
+        if (before && after) {
+          editor.addCut(Math.round(before.end * 1000), Math.round(after.start * 1000), 'split-gap')
+          toast(`Split: cut gap at ${formatTime(currentTime)}`)
+        } else {
+          toast('No content at playhead to split')
+        }
+      }
     } else {
       toast(action + ': coming soon')
     }
@@ -460,8 +582,8 @@ export default function Editor() {
     if (action === 'removeFillers') handleRemoveFillers()
     else if (action === 'trimSilence') handleTrimSilence()
     else if (action === 'cleanAll') handleCleanAll()
-    else if (action === 'studioSound') { setStudioSoundApplied(true); toast('Studio Sound applied') }
-    else if (action === 'normalize') { setNormalizeApplied(true); toast('Audio normalized to -14 LUFS') }
+    else if (action === 'studioSound') { handleStudioSound() }
+    else if (action === 'normalize') { handleNormalize() }
     else if (action === 'export') setExportOpen(true)
     else if (action === 'captions') setCaptionsOpen(true)
     else toast(action + ': coming soon')
@@ -683,7 +805,7 @@ export default function Editor() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg>
               <span className={styles.tbTip}>Captions</span>
             </button>
-            <button className={styles.tbBtn} onClick={() => { setStudioSoundApplied(true); toast('Studio Sound applied') }} title="Studio sound">
+            <button className={styles.tbBtn} onClick={handleStudioSound} title="Studio sound">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
               <span className={styles.tbTip}>Studio Sound</span>
             </button>
@@ -972,7 +1094,7 @@ export default function Editor() {
                       <div className={styles.sugDesc}>Enhance voice clarity and reduce noise</div>
                     </div>
                     <span className={styles.sugDoneLabel}>Applied</span>
-                    <button className={styles.sugAction} onClick={() => { setStudioSoundApplied(true); toast('Studio Sound applied') }}>Apply</button>
+                    <button className={styles.sugAction} onClick={handleStudioSound} disabled={studioSoundProgress !== null}>{studioSoundProgress !== null ? `${studioSoundProgress}%` : 'Apply'}</button>
                   </div>
                   <div className={`${styles.sugCard} ${normalizeApplied ? styles.sugCardDone : ''}`}>
                     <div className={`${styles.sugIndicator} ${styles.sugIndicatorBlue}`} />
@@ -981,7 +1103,7 @@ export default function Editor() {
                       <div className={styles.sugDesc}>Target -14 LUFS for YouTube</div>
                     </div>
                     <span className={styles.sugDoneLabel}>Applied</span>
-                    <button className={styles.sugAction} onClick={() => { setNormalizeApplied(true); toast('Audio normalized to -14 LUFS') }}>Apply</button>
+                    <button className={styles.sugAction} onClick={handleNormalize} disabled={normalizeProgress !== null}>{normalizeProgress !== null ? `${normalizeProgress}%` : 'Apply'}</button>
                   </div>
                 </div>
               </div>
@@ -1081,7 +1203,13 @@ export default function Editor() {
 
         <div className={styles.trackBody} ref={trackBodyRef}>
           {/* Ruler */}
-          <div className={styles.trackRuler} style={{ minWidth: TRACK_META_W + timelineW }}>
+          <div className={styles.trackRuler} style={{ minWidth: TRACK_META_W + timelineW, cursor: 'pointer' }} onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const x = e.clientX - rect.left - TRACK_META_W
+            if (x < 0) return
+            const pct = x / timelineW
+            seekTo(Math.max(0, Math.min(durationSec, pct * durationSec)))
+          }}>
             {rulerMarks.map((mark, i) => (
               <span key={i} className={styles.rulerMark} style={{ left: mark.left }}>{mark.label}</span>
             ))}
@@ -1095,7 +1223,8 @@ export default function Editor() {
               const isVideo = track.type === 'video'
               const isAudio = track.type === 'audio'
               const trackColors: Record<string, string[]> = { video: ['var(--accent)', '#785adc', '#e3b341'], audio: ['var(--green)', 'var(--yellow)', '#f0883e'] }
-              const color = (trackColors[track.type] || ['var(--text-dim)'])[tracks.filter((t, i) => t.type === track.type && i < idx).length] || 'var(--text-muted)'
+              const defaultColor = (trackColors[track.type] || ['var(--text-dim)'])[tracks.filter((t, i) => t.type === track.type && i < idx).length] || 'var(--text-muted)'
+              const color = track.color || defaultColor
               const clipStyle = isVideo ? styles.videoClip : styles.micClip
               const videoIdx = tracks.filter((t, i) => t.type === 'video' && i <= idx).length
               const audioIdx = tracks.filter((t, i) => t.type === 'audio' && i <= idx).length
@@ -1125,7 +1254,12 @@ export default function Editor() {
                   {isAudio && <input type="range" className={styles.volSlider} min="0" max="100" defaultValue="85" onClick={(e) => e.stopPropagation()} />}
                 </div>
               </div>
-              <div className={styles.trackContent}>
+              <div className={styles.trackContent} onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                const pct = (e.clientX - rect.left) / rect.width
+                const time = pct * durationSec
+                seekTo(Math.max(0, Math.min(durationSec, time)))
+              }}>
                 <div className={`${styles.trackClip} ${clipStyle}`} style={{ left: 0, right: '3%' }}>
                   {isAudio && transcript && durationSec > 0 ? (
                     <div className={styles.trackWords}>
@@ -1298,6 +1432,24 @@ export default function Editor() {
           </div>
         </div>
       </div>
+
+      {/* ═══ PROCESSING NOTIFICATION ═══ */}
+      {(studioSoundProgress !== null || normalizeProgress !== null) && (
+        <div className={styles.processingBar}>
+          <div className={styles.processingIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          </div>
+          <div className={styles.processingInfo}>
+            <div className={styles.processingLabel}>
+              {studioSoundProgress !== null ? 'Applying Studio Sound...' : 'Normalizing audio...'}
+            </div>
+            <div className={styles.processingTrack}>
+              <div className={styles.processingFill} style={{ width: `${studioSoundProgress ?? normalizeProgress ?? 0}%` }} />
+            </div>
+          </div>
+          <span className={styles.processingPct}>{studioSoundProgress ?? normalizeProgress ?? 0}%</span>
+        </div>
+      )}
 
       {/* ═══ TOAST ═══ */}
       <div className={`${styles.toast} ${toastVisible ? styles.toastShow : ''}`}>{toastMsg}</div>

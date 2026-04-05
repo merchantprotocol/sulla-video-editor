@@ -139,6 +139,13 @@ const ProjectController = {
     } catch (err) { next(err); }
   },
 
+  async saveTracks(req, res, next) {
+    try {
+      await ProjectService.saveTracks(req.params.id, req.userId, req.body);
+      res.json({ saved: true });
+    } catch (err) { next(err); }
+  },
+
   async getOverlays(req, res, next) {
     try {
       const overlays = await ProjectService.getOverlays(req.params.id, req.userId);
