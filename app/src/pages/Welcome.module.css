@@ -42,3 +42,5 @@
 .social { background: linear-gradient(135deg, #0d2117, #1d3020); color: #3fb950; }
 .tutorial { background: linear-gradient(135deg, #1d1730, #2d2040); color: #b392f0; }
 .templateName { padding: 8px 10px; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+
+.emptyState { text-align: center; padding: 48px 24px; color: var(--text-muted); font-size: 14px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; }

@@ -45,3 +45,6 @@
 .createBtn { flex: 1; padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: white; font-family: var(--sans); font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .createBtn:hover { background: var(--accent-hover); }
 .createBtn svg { width: 18px; height: 18px; }
+.createBtn:disabled { opacity: 0.5; cursor: default; }
+
+.error { padding: 10px 14px; background: var(--red-soft); border: 1px solid rgba(207,34,46,0.15); border-radius: 8px; color: var(--red); font-size: 12px; font-weight: 500; margin-bottom: 16px; }
