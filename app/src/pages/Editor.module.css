@@ -276,9 +276,10 @@
 .tpZoom { display: flex; align-items: center; gap: 2px; }
 .tpZoomBtn { width: 22px; height: 22px; background: none; border: 1px solid var(--border-visible); border-radius: 4px; color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; font-family: var(--mono); }
 .tpZoomBtn:hover { border-color: var(--accent); color: var(--accent); }
+.tpZoomLevel { font-size: 9px; font-family: var(--mono); color: var(--text-dim); min-width: 32px; text-align: center; }
 .tpTrackCount { font-size: 10px; color: var(--text-dim); }
 
-.trackBody { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.trackBody { flex: 1; display: flex; flex-direction: column; overflow-x: auto; overflow-y: hidden; min-height: 0; }
 
 /* Ruler */
 .trackRuler { height: 22px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; padding-left: 140px; position: relative; flex-shrink: 0; }
@@ -288,13 +289,13 @@
 .rulerPlayhead::after { content: ''; position: absolute; top: 0; left: -4px; width: 9px; height: 8px; background: var(--red); clip-path: polygon(0 0, 100% 0, 50% 100%); }
 
 /* Track rows */
-.trackRows { flex: 1; overflow-y: auto; }
+.trackRows { flex: 1; overflow-y: auto; flex-shrink: 0; }
 .trackRow { display: flex; align-items: center; height: 38px; border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
 .trackRow:hover { background: rgba(0,0,0,0.015); }
 .trackRowSelected { background: var(--accent-soft); }
 .trackRowMuted { opacity: 0.35; }
 
-.trackMeta { width: 140px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; flex-shrink: 0; border-right: 1px solid var(--border); height: 100%; }
+.trackMeta { width: 140px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; flex-shrink: 0; border-right: 1px solid var(--border); height: 100%; position: sticky; left: 0; z-index: 2; background: var(--bg-surface); }
 .trackColor { width: 3px; height: 18px; border-radius: 2px; flex-shrink: 0; }
 .trackIcon { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
 .trackName { font-size: 11px; color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }

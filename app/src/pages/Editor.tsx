@@ -2,7 +2,11 @@ import { Link, useParams } from 'react-router-dom'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useProject } from '../hooks/useProjects'
 import { useEditor } from '../hooks/useEditor'
+import { api } from '../lib/api'
 import ExportPanel from '../components/ExportPanel'
+import CaptionsPanel from '../components/CaptionsPanel'
+import AutoClipsPanel from '../components/AutoClipsPanel'
+import UserProfileDropdown from '../components/UserProfileDropdown'
 import styles from './Editor.module.css'
 
 interface Word { word: string; start: number; end: number; confidence: number; speaker: string; filler?: boolean }
@@ -19,6 +23,10 @@ export default function Editor() {
   const [transcribing, setTranscribing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [captionsOpen, setCaptionsOpen] = useState(false)
+  const [clipsOpen, setClipsOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -31,6 +39,8 @@ export default function Editor() {
   const [toastMsg, setToastMsg] = useState('')
   const [toastVisible, setToastVisible] = useState(false)
   const [selectedTrack, setSelectedTrack] = useState('track-video')
+  const [trackZoom, setTrackZoom] = useState(1)
+  const trackBodyRef = useRef<HTMLDivElement>(null)
   const [mutedTracks, setMutedTracks] = useState<Set<string>>(new Set())
   const [soloTrack, setSoloTrack] = useState<string | null>(null)
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false)
@@ -40,6 +50,10 @@ export default function Editor() {
   const [speakerMenuOpen, setSpeakerMenuOpen] = useState<number | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null)
+  const [speakerDraft, setSpeakerDraft] = useState('')
 
   const cmdInputRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -85,6 +99,18 @@ export default function Editor() {
     return () => cancelAnimationFrame(rafId)
   }, [isPlaying, editor.edl])
 
+  // Auto-scroll track body to keep playhead visible when zoomed in
+  useEffect(() => {
+    if (!isPlaying || !trackBodyRef.current || trackZoom <= 1) return
+    const el = trackBodyRef.current
+    const playheadX = TRACK_META_W + (playPercent / 100) * timelineW
+    const viewLeft = el.scrollLeft
+    const viewRight = el.scrollLeft + el.clientWidth
+    if (playheadX < viewLeft + 100 || playheadX > viewRight - 100) {
+      el.scrollLeft = playheadX - el.clientWidth / 2
+    }
+  }, [currentTime, trackZoom])
+
   // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -105,6 +131,10 @@ export default function Editor() {
         setCmdOpen(false)
         setCtxMenu(null)
         setSpeakerMenuOpen(null)
+        setCaptionsOpen(false)
+        setClipsOpen(false)
+        setExportOpen(false)
+        setUserMenuOpen(false)
       }
     }
     window.addEventListener('keydown', handleKey)
@@ -215,6 +245,39 @@ export default function Editor() {
     setTimeout(() => handleTrimSilence(), 50)
   }
 
+  // ─── Title editing ────────────────────────────────────────
+  async function commitTitle() {
+    setEditingTitle(false)
+    const newName = titleDraft.trim()
+    if (!newName || newName === project.name) return
+    try {
+      await api.put(`/projects/${id}`, { name: newName })
+      // Update local project state
+      project.name = newName
+      toast(`Renamed to "${newName}"`)
+    } catch { toast('Failed to rename') }
+  }
+
+  // ─── Speaker name editing ────────────────────────────────
+  async function startRenameSpeaker(speakerId: string, currentName: string) {
+    setSpeakerMenuOpen(null)
+    setEditingSpeaker(speakerId)
+    setSpeakerDraft(currentName)
+  }
+
+  async function commitSpeakerRename(speakerId: string) {
+    setEditingSpeaker(null)
+    const newName = speakerDraft.trim()
+    if (!newName || !transcript) return
+    const speaker = transcript.speakers.find(s => s.id === speakerId)
+    if (!speaker || speaker.name === newName) return
+    speaker.name = newName
+    try {
+      await api.put(`/projects/${id}/transcript`, transcript)
+      toast(`Speaker renamed to "${newName}"`)
+    } catch { toast('Failed to rename speaker') }
+  }
+
   function formatTime(sec: number) {
     const m = Math.floor(sec / 60)
     const s = Math.floor(sec % 60)
@@ -283,12 +346,16 @@ export default function Editor() {
     document.addEventListener('mouseup', onUp)
   }
 
-  // Context menu handler
+  // Context menu handler — clamped to viewport
   function handleContextMenu(e: React.MouseEvent) {
     const target = e.target as HTMLElement
     if (!target.closest(`.${styles.docContent}`)) return
     e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY })
+    const menuW = 220
+    const menuH = 260
+    const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
+    const y = Math.min(e.clientY, window.innerHeight - menuH - 8)
+    setCtxMenu({ x, y })
   }
 
   function ctxAction(action: string) {
@@ -310,7 +377,11 @@ export default function Editor() {
   function handleTrackContextMenu(e: React.MouseEvent, trackId: string, trackType: string, trackName: string) {
     e.preventDefault()
     e.stopPropagation()
-    setTrackCtxMenu({ x: e.clientX, y: e.clientY, trackId, trackType, trackName })
+    const menuW = 230
+    const menuH = trackType === 'video' ? 380 : 345
+    const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
+    const y = Math.min(e.clientY, window.innerHeight - menuH - 8)
+    setTrackCtxMenu({ x, y, trackId, trackType, trackName })
     setCtxMenu(null)
   }
 
@@ -351,6 +422,7 @@ export default function Editor() {
     else if (action === 'studioSound') { setStudioSoundApplied(true); toast('Studio Sound applied') }
     else if (action === 'normalize') { setNormalizeApplied(true); toast('Audio normalized to -14 LUFS') }
     else if (action === 'export') setExportOpen(true)
+    else if (action === 'captions') setCaptionsOpen(true)
     else toast(action + ': coming soon')
   }
 
@@ -363,13 +435,36 @@ export default function Editor() {
   const playPercent = durationSec > 0 ? (currentTime / durationSec) * 100 : 0
 
   // Ruler marks
+  const TRACK_META_W = 140
+  const BASE_TIMELINE_W = 1200
+  const timelineW = BASE_TIMELINE_W * trackZoom
+
   const rulerMarks = useMemo(() => {
     const marks: { left: number; label: string }[] = []
-    for (let i = 0; i <= 12; i++) {
-      marks.push({ left: 140 + i * 100, label: `${String(i).padStart(2, '0')}:00` })
+    // Choose interval so marks don't stack: fewer when zoomed out, more when zoomed in
+    const totalMin = Math.max(1, Math.ceil(originalDur / 60))
+    const pxPerMin = timelineW / totalMin
+    // Pick a step that keeps marks 60-200px apart
+    let stepMin = 1
+    if (pxPerMin < 60) stepMin = Math.ceil(60 / pxPerMin)
+    else if (pxPerMin > 200) stepMin = 0.5
+
+    for (let m = 0; m <= totalMin; m += stepMin) {
+      const left = TRACK_META_W + (m / totalMin) * timelineW
+      const sec = Math.round(m * 60)
+      const mm = Math.floor(sec / 60)
+      const ss = sec % 60
+      marks.push({ left, label: `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}` })
     }
     return marks
-  }, [])
+  }, [timelineW, originalDur])
+
+  function zoomIn() {
+    setTrackZoom(z => Math.min(z * 1.5, 20))
+  }
+  function zoomOut() {
+    setTrackZoom(z => Math.max(z / 1.5, 0.5))
+  }
 
   if (loading) return <div className={styles.app}><div className={styles.loading}>Loading project...</div></div>
   if (!project) return (
@@ -441,7 +536,23 @@ export default function Editor() {
       {/* ═══ TOP BAR ═══ */}
       <div className={styles.topBar}>
         <Link to="/" className={styles.logo}>sulla</Link>
-        <div className={styles.breadcrumb}><span>/</span> <strong>{project.name}</strong></div>
+        <div className={styles.breadcrumb}>
+          <span>/</span>
+          {editingTitle ? (
+            <input
+              className={styles.titleInput}
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={e => { if (e.key === 'Enter') commitTitle(); if (e.key === 'Escape') setEditingTitle(false) }}
+              autoFocus
+            />
+          ) : (
+            <strong className={styles.editableTitle} onClick={() => { setTitleDraft(project.name); setEditingTitle(true) }} title="Click to rename">
+              {project.name}
+            </strong>
+          )}
+        </div>
         <div className={styles.spacer} />
 
         {/* Cleanup summary */}
@@ -475,6 +586,19 @@ export default function Editor() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export
         </button>
+
+        <UserProfileDropdown
+          open={userMenuOpen}
+          onToggle={() => setUserMenuOpen(!userMenuOpen)}
+          userName="Jonathon"
+          userEmail="jonathonbyrd@gmail.com"
+          isDarkMode={isDarkMode}
+          onDarkModeToggle={() => {
+            setIsDarkMode(!isDarkMode)
+            document.documentElement.classList.toggle('dark')
+          }}
+          onAction={(action) => { setUserMenuOpen(false); toast(action + ': coming soon') }}
+        />
       </div>
 
       {/* ═══ TRANSCRIPT AREA ═══ */}
@@ -514,7 +638,7 @@ export default function Editor() {
 
           {/* Captions / Studio Sound / Clips / Translate group */}
           <div className={`${styles.tbGroup} ${styles.tbGroupBorder}`}>
-            <button className={styles.tbBtn} onClick={() => toast('Captions: coming soon')} title="Captions">
+            <button className={styles.tbBtn} onClick={() => setCaptionsOpen(true)} title="Captions">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="14" y2="16"/></svg>
               <span className={styles.tbTip}>Captions</span>
             </button>
@@ -522,7 +646,7 @@ export default function Editor() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
               <span className={styles.tbTip}>Studio Sound</span>
             </button>
-            <button className={styles.tbBtn} onClick={() => toast('Auto clips: coming soon')} title="Auto clips">
+            <button className={styles.tbBtn} onClick={() => setClipsOpen(true)} title="Auto clips">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M10 2v20"/><path d="M2 12h8"/></svg>
               <span className={styles.tbTip}>Auto Clips</span>
             </button>
@@ -579,7 +703,11 @@ export default function Editor() {
                         {(speaker?.name || 'S')[0].toUpperCase()}
                       </div>
                       <div className={styles.speakerInfo}>
-                        <div className={styles.speakerName}>{speaker?.name || 'Speaker'}</div>
+                        {editingSpeaker === block.speaker ? (
+                          <input className={styles.speakerNameInput} value={speakerDraft} onChange={e => setSpeakerDraft(e.target.value)} onBlur={() => commitSpeakerRename(block.speaker)} onKeyDown={e => { if (e.key === 'Enter') commitSpeakerRename(block.speaker); if (e.key === 'Escape') setEditingSpeaker(null) }} autoFocus onClick={e => e.stopPropagation()} />
+                        ) : (
+                          <div className={styles.speakerName} onClick={() => startRenameSpeaker(block.speaker, speaker?.name || 'Speaker')} title="Click to rename">{speaker?.name || 'Speaker'}</div>
+                        )}
                         <div className={styles.speakerTime} onClick={() => seekTo(block.startTime)}>
                           {formatTime(block.startTime)}
                         </div>
@@ -590,7 +718,7 @@ export default function Editor() {
                       </button>
                       {/* Speaker context menu */}
                       <div className={`${styles.speakerMenu} ${speakerMenuOpen === bi ? styles.speakerMenuOpen : ''}`}>
-                        <button className={styles.smItem} onClick={() => { setSpeakerMenuOpen(null); toast('Rename: coming soon') }}>
+                        <button className={styles.smItem} onClick={() => startRenameSpeaker(block.speaker, transcript!.speakers.find(s => s.id === block.speaker)?.name || 'Speaker')}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           Rename Speaker
                         </button>
@@ -758,7 +886,7 @@ export default function Editor() {
                       <div className={styles.sugTitle}>Social clips detected</div>
                       <div className={styles.sugDesc}>Auto-clipped with virality scores</div>
                     </div>
-                    <button className={styles.sugAction} onClick={() => toast('Auto clips: coming soon')}>View</button>
+                    <button className={styles.sugAction} onClick={() => setClipsOpen(true)}>View</button>
                   </div>
                 </div>
               </div>
@@ -829,12 +957,22 @@ export default function Editor() {
           )}
         </div>
 
-        {/* Export panel overlay */}
+        {/* Overlay panels */}
         <ExportPanel
           open={exportOpen}
           onClose={() => setExportOpen(false)}
           onExport={renderVideo}
           projectName={project.name}
+        />
+        <CaptionsPanel
+          open={captionsOpen}
+          onClose={() => setCaptionsOpen(false)}
+          onGenerate={(opts) => { setCaptionsOpen(false); toast('Captions generated') }}
+        />
+        <AutoClipsPanel
+          open={clipsOpen}
+          onClose={() => setClipsOpen(false)}
+          onExportAll={() => { setClipsOpen(false); toast('Exporting clips: coming soon') }}
         />
       </div>
 
@@ -875,22 +1013,23 @@ export default function Editor() {
           <span className={styles.tpTime}>{formatTime(currentTime)} / {formatTime(editedDur)}</span>
           <div className={styles.tpSpacer} />
           <div className={styles.tpZoom}>
-            <button className={styles.tpZoomBtn} onClick={() => toast('Zoom out')}>-</button>
-            <button className={styles.tpZoomBtn} onClick={() => toast('Zoom in')}>+</button>
+            <button className={styles.tpZoomBtn} onClick={zoomOut} title="Zoom out">-</button>
+            <span className={styles.tpZoomLevel}>{Math.round(trackZoom * 100)}%</span>
+            <button className={styles.tpZoomBtn} onClick={zoomIn} title="Zoom in">+</button>
           </div>
         </div>
 
-        <div className={styles.trackBody}>
+        <div className={styles.trackBody} ref={trackBodyRef}>
           {/* Ruler */}
-          <div className={styles.trackRuler}>
+          <div className={styles.trackRuler} style={{ minWidth: TRACK_META_W + timelineW }}>
             {rulerMarks.map((mark, i) => (
               <span key={i} className={styles.rulerMark} style={{ left: mark.left }}>{mark.label}</span>
             ))}
-            <div className={styles.rulerPlayhead} style={{ left: 140 + (playPercent / 100) * 1200 }} />
+            <div className={styles.rulerPlayhead} style={{ left: TRACK_META_W + (playPercent / 100) * timelineW }} />
           </div>
 
           {/* Track rows */}
-          <div className={styles.trackRows}>
+          <div className={styles.trackRows} style={{ minWidth: TRACK_META_W + timelineW }}>
             {tracks.length > 0 ? tracks.map((track, idx) => {
               const trackId = `track-${track.type}-${track.index}`
               const isVideo = track.type === 'video'

@@ -16,6 +16,10 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
   const [format, setFormat] = useState('16:9')
   const [resolution, setResolution] = useState('1080p')
   const [quality, setQuality] = useState('high')
+  const [includeCaptions, setIncludeCaptions] = useState(true)
+  const [studioSound, setStudioSound] = useState(true)
+  const [autoReframe, setAutoReframe] = useState(true)
+  const [normalizeAudio, setNormalizeAudio] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [progress, setProgress] = useState('')
   const [result, setResult] = useState<any>(null)
@@ -114,6 +118,26 @@ export default function ExportPanel({ open, onClose, onExport, projectName }: Pr
             <div className={styles.section}>
               <div className={styles.optRow}><span>Codec</span><span>H.264 (MP4)</span></div>
               <div className={styles.optRow}><span>Audio</span><span>AAC 192kbps</span></div>
+            </div>
+
+            <div className={styles.section}>
+              <div className={styles.label}>Options</div>
+              <div className={styles.optRow}>
+                <span>Include captions</span>
+                <div className={`${styles.toggle} ${includeCaptions ? styles.toggleOn : ''}`} onClick={() => setIncludeCaptions(!includeCaptions)} />
+              </div>
+              <div className={styles.optRow}>
+                <span>Studio sound</span>
+                <div className={`${styles.toggle} ${studioSound ? styles.toggleOn : ''}`} onClick={() => setStudioSound(!studioSound)} />
+              </div>
+              <div className={styles.optRow}>
+                <span>Auto-reframe (face track)</span>
+                <div className={`${styles.toggle} ${autoReframe ? styles.toggleOn : ''}`} onClick={() => setAutoReframe(!autoReframe)} />
+              </div>
+              <div className={styles.optRow}>
+                <span>Normalize audio</span>
+                <div className={`${styles.toggle} ${normalizeAudio ? styles.toggleOn : ''}`} onClick={() => setNormalizeAudio(!normalizeAudio)} />
+              </div>
             </div>
 
             {error && <div className={styles.error}>{error}</div>}

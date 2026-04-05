@@ -13,6 +13,7 @@ const ProjectController = {
       const project = await ProjectService.create(req.userId, {
         name: req.body.name,
         ruleTemplate: req.body.rule_template,
+        templateId: req.body.template_id,
       });
       res.json({ project });
     } catch (err) { next(err); }
@@ -86,6 +87,13 @@ const ProjectController = {
     try {
       const transcript = await ProjectService.getTranscript(req.params.id, req.userId);
       res.json(transcript);
+    } catch (err) { next(err); }
+  },
+
+  async saveTranscript(req, res, next) {
+    try {
+      await ProjectService.saveTranscript(req.params.id, req.userId, req.body);
+      res.json({ saved: true });
     } catch (err) { next(err); }
   },
 

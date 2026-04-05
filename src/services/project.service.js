@@ -8,6 +8,8 @@ const TranscribeService = require('./transcribe');
 const { NotFoundError, ValidationError } = require('../utils/errors');
 const config = require('../utils/config');
 const log = require('../utils/logger').create('project');
+const TemplateRepository = require('../repositories/template.repository');
+const { SYSTEM_TEMPLATES } = require('../templates/system');
 
 function projectPath(projectId, ...segments) {
   return path.join(config.storageRoot, projectId, ...segments);
@@ -52,14 +54,48 @@ const ProjectService = {
     return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks: hasTracks || tracks.length > 0 }, tracks };
   },
 
-  async create(userId, { name, ruleTemplate }) {
+  async create(userId, { name, ruleTemplate, templateId }) {
     if (!name) throw new ValidationError('Project name is required');
 
     const org = await OrgRepository.getUserOrg(userId);
     if (!org) throw new ValidationError('No organization found');
 
-    const project = await ProjectRepository.create({ orgId: org.id, name, ruleTemplate, createdBy: userId });
-    log.info('Project created', { projectId: project.id, name, orgId: org.id });
+    // Resolve template config: by template_id, by slug, or fall back to system defaults
+    let templateConfig = null;
+    let resolvedTemplateId = templateId || null;
+
+    if (templateId) {
+      // Lookup by ID (could be a DB template or a file-based system-xxx ID)
+      if (templateId.startsWith('system-')) {
+        const slug = templateId.replace('system-', '');
+        const tpl = SYSTEM_TEMPLATES[slug];
+        if (tpl) templateConfig = { theme: tpl.theme, scenes: tpl.scenes, rules: tpl.rules, export: tpl.export };
+      } else {
+        try {
+          const tpl = await TemplateRepository.findById(templateId);
+          if (tpl) {
+            templateConfig = typeof tpl.config === 'string' ? JSON.parse(tpl.config) : tpl.config;
+            resolvedTemplateId = tpl.id;
+          }
+        } catch {}
+      }
+    }
+
+    // Fall back to slug-based lookup (legacy rule_template field)
+    if (!templateConfig && ruleTemplate && ruleTemplate !== 'custom') {
+      const tpl = SYSTEM_TEMPLATES[ruleTemplate];
+      if (tpl) templateConfig = { theme: tpl.theme, scenes: tpl.scenes, rules: tpl.rules, export: tpl.export };
+    }
+
+    const project = await ProjectRepository.create({
+      orgId: org.id,
+      name,
+      ruleTemplate,
+      templateId: resolvedTemplateId,
+      templateConfig,
+      createdBy: userId,
+    });
+    log.info('Project created', { projectId: project.id, name, orgId: org.id, template: ruleTemplate || templateId });
 
     await fs.mkdir(projectPath(project.id, 'media', 'thumbnails'), { recursive: true });
     await fs.mkdir(projectPath(project.id, 'data'), { recursive: true });

@@ -1,0 +1,28 @@
+.panel { position: absolute; inset: 0; background: var(--bg-surface); z-index: 20; display: flex; flex-direction: column; animation: slideIn 0.2s ease; }
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); gap: 6px; }
+.header h3 { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.clipCount { font-size: 10px; color: var(--accent); font-weight: 600; }
+.spacer { flex: 1; }
+.close { width: 28px; height: 28px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+.close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+.clipCard { display: flex; gap: 10px; padding: 10px; background: var(--bg-elevated); border-radius: 8px; cursor: pointer; transition: all 0.12s; border: 1px solid transparent; }
+.clipCard:hover { border-color: var(--border-visible); }
+
+.clipThumb { width: 72px; height: 40px; background: var(--bg-hover); border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--text-dim); position: relative; }
+.clipDur { position: absolute; bottom: 2px; right: 2px; font-size: 8px; padding: 0 3px; background: rgba(0,0,0,0.6); color: white; border-radius: 2px; font-family: var(--mono); }
+
+.clipInfo { flex: 1; min-width: 0; }
+.clipTitle { font-size: 11px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.clipMeta { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+
+.virality { font-weight: 600; }
+.viralityHigh { color: var(--green); }
+.viralityMed { color: var(--yellow); }
+
+.exportBtn { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: white; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: auto; flex-shrink: 0; }
+.exportBtn:hover { background: var(--accent-hover); }

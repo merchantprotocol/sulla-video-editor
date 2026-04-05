@@ -3,7 +3,7 @@ const pool = require('../lib/db');
 const ProjectRepository = {
   async findByOrgId(orgId) {
     const { rows } = await pool.query(
-      `SELECT id, name, status, rule_template, duration_ms, resolution, file_size, created_at, updated_at
+      `SELECT id, name, status, rule_template, template_id, template_config, duration_ms, resolution, file_size, created_at, updated_at
        FROM projects WHERE org_id = $1 ORDER BY updated_at DESC`,
       [orgId]
     );
@@ -25,10 +25,11 @@ const ProjectRepository = {
     return rows[0] || null;
   },
 
-  async create({ orgId, name, ruleTemplate, createdBy }) {
+  async create({ orgId, name, ruleTemplate, templateId, templateConfig, createdBy }) {
     const { rows } = await pool.query(
-      'INSERT INTO projects (org_id, name, rule_template, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
-      [orgId, name, ruleTemplate || null, createdBy]
+      `INSERT INTO projects (org_id, name, rule_template, template_id, template_config, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [orgId, name, ruleTemplate || null, templateId || null, templateConfig ? JSON.stringify(templateConfig) : null, createdBy]
     );
     return rows[0];
   },

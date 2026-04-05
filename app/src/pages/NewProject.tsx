@@ -1,21 +1,18 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useRef } from 'react'
 import { chunkedUpload, formatBytes } from '../lib/chunkedUpload'
+import { useTemplates, type Template, type TemplateConfig } from '../hooks/useTemplates'
 import styles from './NewProject.module.css'
 
-const ruleTemplates = [
-  { id: 'podcast', icon: '🎙️', name: 'Podcast', desc: 'Clean fillers, normalize, add intro/outro' },
-  { id: 'youtube', icon: '🎬', name: 'YouTube', desc: 'Hook optimization, B-roll, captions, end card' },
-  { id: 'social', icon: '📱', name: 'Social Clips', desc: 'Extract highlights, reformat, add captions' },
-  { id: 'tutorial', icon: '📚', name: 'Tutorial', desc: 'Section headers, code callouts, pacing' },
-  { id: 'interview', icon: '🎤', name: 'Interview', desc: 'Speaker labels, split-screen, Q&A segments' },
-  { id: 'custom', icon: '+', name: 'Custom', desc: 'Start with no rules, build your own' },
-]
+const ruleIcons: Record<string, string> = {
+  podcast: '🎙️', youtube: '🎬', social: '📱', tutorial: '📚', interview: '🎤',
+}
 
 export default function NewProject() {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [selectedRule, setSelectedRule] = useState('podcast')
+  const { templates, loading: templatesLoading } = useTemplates()
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [projectName, setProjectName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -63,10 +60,15 @@ export default function NewProject() {
 
       // 1. Create project
       setProgress('Creating project...')
+      const selected = templates.find(t => t.id === selectedTemplateId)
       const createRes = await fetch('/api/projects', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name: projectName, rule_template: selectedRule }),
+        body: JSON.stringify({
+          name: projectName,
+          template_id: selectedTemplateId || undefined,
+          rule_template: selected?.slug || 'custom',
+        }),
         signal: abort.signal,
       })
       if (!createRes.ok) throw new Error((await createRes.json()).error)
@@ -147,26 +149,61 @@ export default function NewProject() {
           />
         </div>
 
-        {/* Rule template */}
+        {/* Template selection */}
         <div className={styles.formSection}>
-          <label className={styles.formLabel}>Editing Rules</label>
+          <label className={styles.formLabel}>Template</label>
           <div className={styles.ruleGrid}>
-            {ruleTemplates.map(r => (
-              <div
-                key={r.id}
-                className={`${styles.ruleCard} ${selectedRule === r.id ? styles.selected : ''}`}
-                onClick={() => setSelectedRule(r.id)}
-              >
-                <div className={styles.ruleIcon}>{r.icon}</div>
-                <div className={styles.ruleInfo}>
-                  <div className={styles.ruleName}>{r.name}</div>
-                  <div className={styles.ruleDesc}>{r.desc}</div>
+            {templatesLoading ? (
+              <div style={{ padding: 12, color: 'var(--text-dim)', fontSize: 12 }}>Loading templates...</div>
+            ) : (
+              <>
+                {templates.map(t => {
+                  const cfg = t.config as TemplateConfig | undefined
+                  const icon = ruleIcons[t.slug || ''] || '🎞️'
+                  const rulesDesc = cfg?.rules ? [
+                    cfg.rules.removeFillers && 'Remove fillers',
+                    cfg.rules.trimSilence?.enabled && 'Trim silence',
+                    cfg.rules.studioSound && 'Studio sound',
+                    cfg.rules.autoCaptions && 'Auto captions',
+                    cfg.rules.autoClips && 'Auto clips',
+                  ].filter(Boolean).join(', ') : ''
+
+                  return (
+                    <div
+                      key={t.id}
+                      className={`${styles.ruleCard} ${selectedTemplateId === t.id ? styles.selected : ''}`}
+                      onClick={() => setSelectedTemplateId(t.id)}
+                    >
+                      <div className={styles.ruleIcon}>{icon}</div>
+                      <div className={styles.ruleInfo}>
+                        <div className={styles.ruleName}>
+                          {t.name}
+                          {t.is_system && <span className={styles.systemBadge}>system</span>}
+                        </div>
+                        <div className={styles.ruleDesc}>{t.description || rulesDesc}</div>
+                      </div>
+                      <div className={styles.ruleCheck}>
+                        {selectedTemplateId === t.id && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </div>
+                    </div>
+                  )
+                })}
+                {/* Custom / no template option */}
+                <div
+                  className={`${styles.ruleCard} ${selectedTemplateId === null ? styles.selected : ''}`}
+                  onClick={() => setSelectedTemplateId(null)}
+                >
+                  <div className={styles.ruleIcon}>+</div>
+                  <div className={styles.ruleInfo}>
+                    <div className={styles.ruleName}>Custom</div>
+                    <div className={styles.ruleDesc}>Start with no rules, build your own</div>
+                  </div>
+                  <div className={styles.ruleCheck}>
+                    {selectedTemplateId === null && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
                 </div>
-                <div className={styles.ruleCheck}>
-                  {selectedRule === r.id && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                </div>
-              </div>
-            ))}
+              </>
+            )}
           </div>
         </div>
 

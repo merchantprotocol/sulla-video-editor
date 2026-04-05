@@ -20,6 +20,11 @@
 .optRow span:first-child { color: var(--text-muted); }
 .optRow span:last-child { color: var(--text-primary); font-weight: 500; }
 
+.toggle { width: 36px; height: 20px; background: var(--bg-hover); border: 1px solid var(--border-visible); border-radius: 10px; position: relative; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+.toggleOn { background: var(--accent-soft); border-color: var(--accent); }
+.toggle::after { content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); top: 2px; left: 2px; transition: all 0.2s; }
+.toggleOn::after { left: 18px; background: var(--accent); }
+
 .error { padding: 8px 12px; background: var(--red-soft); border: 1px solid rgba(207,34,46,0.12); border-radius: 6px; color: var(--red); font-size: 12px; }
 
 .exportBtn { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: white; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: auto; }
