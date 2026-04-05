@@ -87,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     localStorage.removeItem('sulla_token')
     localStorage.removeItem('sulla_org')
+    document.cookie = 'sulla_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     setUser(null)
     setOrgs([])
     setCurrentOrg(null)

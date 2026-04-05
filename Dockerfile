@@ -14,6 +14,7 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp \
     && cp build/bin/whisper-cli /usr/local/bin/whisper-cli \
     && chmod +x /usr/local/bin/whisper-cli \
     && cp build/src/libwhisper.so* /usr/local/lib/ \
+    && cp build/ggml/src/libggml*.so* /usr/local/lib/ \
     && ldconfig
 
 # Download the base English model
