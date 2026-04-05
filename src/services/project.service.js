@@ -7,6 +7,7 @@ const MediaService = require('./media');
 const TranscribeService = require('./transcribe');
 const { NotFoundError, ValidationError } = require('../utils/errors');
 const config = require('../utils/config');
+const log = require('../utils/logger').create('project');
 
 function projectPath(projectId, ...segments) {
   return path.join(config.storageRoot, projectId, ...segments);
@@ -37,6 +38,7 @@ const ProjectService = {
     if (!org) throw new ValidationError('No organization found');
 
     const project = await ProjectRepository.create({ orgId: org.id, name, ruleTemplate, createdBy: userId });
+    log.info('Project created', { projectId: project.id, name, orgId: org.id });
 
     await fs.mkdir(projectPath(project.id, 'media', 'thumbnails'), { recursive: true });
     await fs.mkdir(projectPath(project.id, 'data'), { recursive: true });
@@ -64,6 +66,9 @@ const ProjectService = {
     const project = await ProjectRepository.findByIdAndUser(projectId, userId);
     if (!project) throw new NotFoundError('Project not found');
 
+    log.info('Importing media', { projectId, filename });
+    const start = Date.now();
+
     const ext = path.extname(filename) || '.mp4';
     const sourcePath = projectPath(projectId, 'media', `source${ext}`);
 
@@ -75,11 +80,18 @@ const ProjectService = {
       ws.on('finish', resolve);
       ws.on('error', reject);
     });
+    log.info('File saved to disk', { projectId, filename });
 
     // Extract metadata, audio, thumbnails
+    log.info('Extracting metadata', { projectId });
     const metadata = await MediaService.extractMetadata(sourcePath);
+    log.info('Metadata extracted', { projectId, duration_ms: metadata.duration_ms, resolution: metadata.resolution, file_size: metadata.file_size });
+
+    log.info('Extracting audio', { projectId });
     const audioPath = projectPath(projectId, 'media', 'audio.wav');
     await MediaService.extractAudio(sourcePath, audioPath);
+
+    log.info('Generating thumbnails', { projectId });
     await MediaService.generateThumbnails(sourcePath, projectPath(projectId, 'media', 'thumbnails'));
 
     // Update DB
@@ -91,6 +103,7 @@ const ProjectService = {
       status: 'editing',
     });
 
+    log.info('Import complete', { projectId, durationMs: Date.now() - start });
     return metadata;
   },
 
@@ -101,11 +114,23 @@ const ProjectService = {
     const audioPath = projectPath(projectId, 'media', 'audio.wav');
     if (!existsSync(audioPath)) throw new ValidationError('No audio file found. Import media first.');
 
+    log.info('Starting transcription', { projectId });
+    const start = Date.now();
+
     const transcript = await TranscribeService.transcribe(audioPath);
     const transcriptPath = projectPath(projectId, 'data', 'transcript.json');
     await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 2));
 
     await ProjectRepository.update(projectId, { transcript_path: transcriptPath });
+
+    const fillerCount = transcript.words.filter(w => w.filler).length;
+    log.info('Transcription complete', {
+      projectId,
+      words: transcript.words.length,
+      fillers: fillerCount,
+      silences: transcript.silences.length,
+      durationMs: Date.now() - start,
+    });
 
     return { word_count: transcript.words.length, duration_ms: transcript.duration_ms };
   },

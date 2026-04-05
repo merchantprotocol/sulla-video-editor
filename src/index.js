@@ -1,10 +1,15 @@
 const express = require('express');
 const path = require('path');
 const config = require('./utils/config');
+const log = require('./utils/logger').create('server');
+const requestId = require('./middleware/requestId');
 const errorHandler = require('./middleware/errorHandler');
 const AuthController = require('./controllers/auth.controller');
 
 const app = express();
+
+// Request ID + access logging (must be first)
+app.use(requestId);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -49,5 +54,5 @@ app.use(errorHandler);
 // ─── Start ──────────────────────────────────────────────────
 
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`sulla-video-editor running on port ${config.port}`);
+  log.info(`Server started on port ${config.port}`, { pid: process.pid, nodeVersion: process.version });
 });

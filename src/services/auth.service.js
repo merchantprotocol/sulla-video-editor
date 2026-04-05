@@ -3,6 +3,7 @@ const { hashPassword, verifyPassword, createToken } = require('../lib/auth');
 const UserRepository = require('../repositories/user.repository');
 const OrgRepository = require('../repositories/org.repository');
 const { ValidationError, UnauthorizedError, ConflictError } = require('../utils/errors');
+const log = require('../utils/logger').create('auth');
 
 const AuthService = {
   async register({ name, email, password, orgName }) {
@@ -31,9 +32,11 @@ const AuthService = {
       await client.query('COMMIT');
 
       const token = createToken({ sub: user.id, email });
+      log.info('User registered', { userId: user.id, email, orgId: org.id, orgName });
       return { token, user: { id: user.id, name, email }, orgs: [{ id: org.id, name: orgName, role: 'owner' }] };
     } catch (err) {
       await client.query('ROLLBACK');
+      log.error('Registration failed', { email, error: err.message });
       throw err;
     } finally {
       client.release();
@@ -44,13 +47,21 @@ const AuthService = {
     if (!email || !password) throw new ValidationError('Email and password are required');
 
     const user = await UserRepository.findByEmail(email);
-    if (!user) throw new UnauthorizedError('Invalid email or password');
+    if (!user) {
+      log.warn('Login failed: unknown email', { email });
+      throw new UnauthorizedError('Invalid email or password');
+    }
 
     const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) throw new UnauthorizedError('Invalid email or password');
+    if (!valid) {
+      log.warn('Login failed: wrong password', { email, userId: user.id });
+      throw new UnauthorizedError('Invalid email or password');
+    }
 
     const orgs = await UserRepository.getOrgsForUser(user.id);
     const token = createToken({ sub: user.id, email });
+
+    log.info('User logged in', { userId: user.id, email, orgs: orgs.length });
 
     return {
       token,

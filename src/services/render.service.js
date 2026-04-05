@@ -5,6 +5,7 @@ const fs = require('fs/promises');
 const { existsSync } = require('fs');
 const config = require('../utils/config');
 const { ValidationError } = require('../utils/errors');
+const log = require('../utils/logger').create('render');
 
 const exec = promisify(execFile);
 
@@ -57,6 +58,9 @@ async function render(projectId, options = {}) {
     codec = 'libx264',
     quality = 'high',
   } = options;
+
+  log.info('Starting render', { projectId, format, resolution, quality });
+  const start = Date.now();
 
   const projectDir = path.join(config.storageRoot, projectId);
   const mediaDir = path.join(projectDir, 'media');
@@ -125,12 +129,12 @@ async function render(projectId, options = {}) {
 
   // Run FFmpeg with progress
   const totalFrames = Math.round((durationMs / 1000) * 30); // estimate
-  const result = await runFFmpeg(args, totalFrames);
+  await runFFmpeg(args, totalFrames);
 
   // Get output file info
   const stat = await fs.stat(outputPath);
 
-  return {
+  const result = {
     path: outputPath,
     name: outputName,
     size: stat.size,
@@ -142,6 +146,16 @@ async function render(projectId, options = {}) {
       ? Math.round(selectResult.keeps.reduce((sum, k) => sum + (k.end - k.start), 0) * 1000)
       : durationMs,
   };
+
+  log.info('Render complete', {
+    projectId,
+    output: outputName,
+    size: stat.size,
+    cuts: edl.cuts.length,
+    durationMs: Date.now() - start,
+  });
+
+  return result;
 }
 
 /**
