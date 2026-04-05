@@ -24,8 +24,9 @@ RUN mkdir -p /opt/whisper-models \
 
 ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
 
-# Install Chromium dependencies + Google Chrome Stable
-# (Ubuntu 24.04's chromium-browser is a snap stub, doesn't work in Docker)
+# Install Chromium for headless rendering
+# Ubuntu 24.04 replaced chromium with a snap stub, so we install from
+# the Debian repos via a direct .deb, or use Playwright's Chromium
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-noto-color-emoji \
@@ -45,12 +46,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcomposite1 \
     libxdamage1 \
     libxrandr2 \
-    wget \
     xdg-utils \
-    && wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get install -y ./google-chrome-stable_current_amd64.deb \
-    && rm google-chrome-stable_current_amd64.deb \
     && rm -rf /var/lib/apt/lists/*
 
+# Use npx playwright to install a working Chromium binary (ARM64 + AMD64)
+RUN npx playwright install chromium --with-deps 2>/dev/null \
+    && CHROMIUM_PATH=$(npx playwright install --dry-run chromium 2>/dev/null | grep -oP '/.*chromium-\d+/chrome-linux/chrome' || find /root/.cache -name "chrome" -type f 2>/dev/null | head -1) \
+    && if [ -n "$CHROMIUM_PATH" ] && [ -f "$CHROMIUM_PATH" ]; then \
+         ln -sf "$CHROMIUM_PATH" /usr/local/bin/chromium; \
+         echo "Chromium linked: $CHROMIUM_PATH"; \
+       else \
+         echo "Finding Chromium..."; \
+         FOUND=$(find / -name "chrome" -type f -path "*/chromium*" 2>/dev/null | head -1); \
+         if [ -n "$FOUND" ]; then ln -sf "$FOUND" /usr/local/bin/chromium; echo "Chromium: $FOUND"; \
+         else echo "WARNING: Chromium not found"; fi; \
+       fi
+
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium

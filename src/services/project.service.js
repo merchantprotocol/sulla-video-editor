@@ -72,14 +72,18 @@ const ProjectService = {
     const ext = path.extname(filename) || '.mp4';
     const sourcePath = projectPath(projectId, 'media', `source${ext}`);
 
-    // Stream file to disk
-    const { createWriteStream } = require('fs');
-    await new Promise((resolve, reject) => {
-      const ws = createWriteStream(sourcePath);
-      stream.pipe(ws);
-      ws.on('finish', resolve);
-      ws.on('error', reject);
-    });
+    // Write file to disk (req.body is a Buffer from express.raw middleware)
+    if (Buffer.isBuffer(stream.body)) {
+      await fs.writeFile(sourcePath, stream.body);
+    } else {
+      const { createWriteStream } = require('fs');
+      await new Promise((resolve, reject) => {
+        const ws = createWriteStream(sourcePath);
+        stream.pipe(ws);
+        ws.on('finish', resolve);
+        ws.on('error', reject);
+      });
+    }
     log.info('File saved to disk', { projectId, filename });
 
     // Extract metadata, audio, thumbnails
