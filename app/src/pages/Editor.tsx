@@ -457,6 +457,7 @@ export default function Editor() {
 
   // Compute playhead position as percentage of duration
   const durationSec = (project?.duration_ms || 0) / 1000
+  const originalDur = durationSec
   const playPercent = durationSec > 0 ? (currentTime / durationSec) * 100 : 0
 
   // Ruler marks
@@ -511,7 +512,6 @@ export default function Editor() {
   const fillerCount = transcript ? transcript.words.filter(w => w.filler && !editor.isCut(w.start * 1000, w.end * 1000)).length : 0
   const silenceCount = transcript ? transcript.silences.filter(s => !editor.isCut(s.start * 1000, s.end * 1000)).length : 0
   const totalCutSec = editor.totalCutMs() / 1000
-  const originalDur = (project.duration_ms || 0) / 1000
   const editedDur = originalDur - totalCutSec
   const isClean = fillerCount === 0 && silenceCount === 0
 

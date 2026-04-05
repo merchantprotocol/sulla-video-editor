@@ -295,9 +295,164 @@ function runFFmpeg(args, totalFrames) {
   });
 }
 
+/**
+ * Run FFmpeg with progress events streamed back via an EventEmitter.
+ * Parses stderr for "time=HH:MM:SS.ss" to compute percentage.
+ * Emits: 'progress' (number 0-100), 'done' (result), 'error' (Error)
+ */
+function runFFmpegWithProgress(args, durationMs) {
+  const { EventEmitter } = require('events');
+  const emitter = new EventEmitter();
+
+  const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+
+  proc.stderr.on('data', chunk => {
+    stderr += chunk.toString();
+    // Parse: "time=00:01:23.45"
+    const matches = stderr.match(/time=(\d+):(\d+):(\d+\.\d+)/g);
+    if (matches && durationMs > 0) {
+      const last = matches[matches.length - 1];
+      const m = last.match(/time=(\d+):(\d+):(\d+\.\d+)/);
+      if (m) {
+        const sec = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
+        const pct = Math.min(99, Math.round((sec * 1000 / durationMs) * 100));
+        emitter.emit('progress', pct);
+      }
+    }
+  });
+
+  proc.on('close', code => {
+    if (code === 0) {
+      emitter.emit('progress', 100);
+      emitter.emit('done', { success: true });
+    } else {
+      emitter.emit('error', new Error(`FFmpeg exited with code ${code}: ${stderr.slice(-500)}`));
+    }
+  });
+
+  proc.on('error', err => emitter.emit('error', err));
+
+  return emitter;
+}
+
+/**
+ * Stream-based render that emits progress events.
+ * Returns an EventEmitter that emits 'progress', 'done', 'error'.
+ */
+function renderWithProgress(projectId, options = {}) {
+  const { EventEmitter } = require('events');
+  const emitter = new EventEmitter();
+
+  // Run the full render pipeline asynchronously
+  (async () => {
+    try {
+      const {
+        format = '16:9',
+        resolution = '1080p',
+        codec = 'libx264',
+        quality = 'high',
+      } = options;
+
+      log.info('Starting render (streaming)', { projectId, format, resolution, quality });
+      const start = Date.now();
+
+      const projectDir = path.join(config.storageRoot, projectId);
+      const mediaDir = path.join(projectDir, 'media');
+      const dataDir = path.join(projectDir, 'data');
+      const exportsDir = path.join(projectDir, 'exports');
+
+      const sourceFile = findSourceFile(mediaDir);
+      if (!sourceFile) throw new ValidationError('No source media found');
+
+      const edlPath = path.join(dataDir, 'edl.json');
+      let edl = { version: 1, cuts: [] };
+      if (existsSync(edlPath)) {
+        edl = JSON.parse(await fs.readFile(edlPath, 'utf-8'));
+      }
+
+      const { stdout } = await exec('ffprobe', [
+        '-v', 'quiet', '-show_entries', 'format=duration',
+        '-of', 'csv=p=0', sourceFile,
+      ]);
+      const durationMs = Math.round(parseFloat(stdout.trim()) * 1000);
+
+      const resMap = { '1080p': '1920:1080', '720p': '1280:720', '4k': '3840:2160' };
+      const res = resMap[resolution] || '1920:1080';
+      const [w, h] = res.split(':').map(Number);
+      const dims = getOutputDimensions(format, w, h);
+      const outputName = `${format.replace(/[:/]/g, 'x')}-${resolution}.mp4`;
+      const outputPath = path.join(exportsDir, outputName);
+      await fs.mkdir(exportsDir, { recursive: true });
+
+      const args = ['-i', sourceFile, '-y'];
+      const selectResult = buildSelectFilter(edl, durationMs);
+
+      if (selectResult && selectResult.keeps.length > 1) {
+        const { filterGraph } = buildConcatFilter(selectResult.keeps);
+        const scaleFilter = `[outv]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2[finalv]`;
+        args.push('-filter_complex', `${filterGraph}; ${scaleFilter}`);
+        args.push('-map', '[finalv]', '-map', '[outa]');
+      } else if (selectResult && selectResult.keeps.length === 1) {
+        const k = selectResult.keeps[0];
+        args.push('-ss', k.start.toFixed(3), '-t', (k.end - k.start).toFixed(3));
+        args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+      } else {
+        args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+      }
+
+      const crf = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
+      args.push('-c:v', codec, '-crf', crf, '-preset', 'medium');
+      args.push('-c:a', 'aac', '-b:a', '192k');
+      args.push('-movflags', '+faststart');
+      args.push(outputPath);
+
+      // Run FFmpeg with progress tracking
+      const ffmpeg = runFFmpegWithProgress(args, durationMs);
+
+      ffmpeg.on('progress', pct => emitter.emit('progress', pct));
+
+      ffmpeg.on('done', async () => {
+        try {
+          const stat = await fs.stat(outputPath);
+          const result = {
+            path: outputPath,
+            name: outputName,
+            size: stat.size,
+            format,
+            resolution,
+            cuts_applied: edl.cuts.length,
+            original_duration_ms: durationMs,
+            edited_duration_ms: selectResult
+              ? Math.round(selectResult.keeps.reduce((sum, k) => sum + (k.end - k.start), 0) * 1000)
+              : durationMs,
+          };
+
+          log.info('Render complete (streaming)', {
+            projectId, output: outputName, size: stat.size,
+            cuts: edl.cuts.length, durationMs: Date.now() - start,
+          });
+
+          emitter.emit('done', result);
+        } catch (err) {
+          emitter.emit('error', err);
+        }
+      });
+
+      ffmpeg.on('error', err => emitter.emit('error', err));
+
+    } catch (err) {
+      emitter.emit('error', err);
+    }
+  })();
+
+  return emitter;
+}
+
 module.exports = {
   render,
   renderClip,
+  renderWithProgress,
   buildSelectFilter,
   buildConcatFilter,
   getOutputDimensions,

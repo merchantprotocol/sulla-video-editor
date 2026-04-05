@@ -34,6 +34,43 @@ const RenderController = {
     } catch (err) { next(err); }
   },
 
+  async renderStream(req, res, next) {
+    try {
+      const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
+      if (!project) throw new NotFoundError('Project not found');
+
+      const { format, resolution, codec, quality } = req.body;
+      const emitter = RenderService.renderWithProgress(project.id, { format, resolution, codec, quality });
+
+      // SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      emitter.on('progress', (pct) => {
+        res.write(`data: ${JSON.stringify({ type: 'progress', progress: pct })}\n\n`);
+      });
+
+      emitter.on('done', async (result) => {
+        await ProjectRepository.update(project.id, { status: 'exported' });
+        res.write(`data: ${JSON.stringify({ type: 'done', ...result })}\n\n`);
+        res.end();
+      });
+
+      emitter.on('error', (err) => {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+        res.end();
+      });
+
+      req.on('close', () => {
+        emitter.removeAllListeners();
+      });
+    } catch (err) { next(err); }
+  },
+
   async serveExport(req, res, next) {
     try {
       const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
