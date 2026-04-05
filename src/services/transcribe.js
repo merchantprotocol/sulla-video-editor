@@ -2,7 +2,9 @@ const { execFile, spawn } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs/promises');
 const path = require('path');
+const os = require('os');
 const { EventEmitter } = require('events');
+const log = require('../utils/logger').create('transcribe');
 
 const exec = promisify(execFile);
 
@@ -198,4 +200,110 @@ function transformWhisperOutput(whisperOutput) {
   };
 }
 
-module.exports = { transcribe, transcribeWithProgress, transformWhisperOutput };
+/**
+ * Re-align word timestamps by re-running whisper on the audio segment
+ * surrounding the edited words.
+ *
+ * @param {string} audioPath - Path to the full audio file
+ * @param {Array} words - Full words array from the transcript
+ * @param {number} startIdx - Start index of edited word range
+ * @param {number} endIdx - End index of edited word range (inclusive)
+ * @returns {Array} Updated words array with corrected timestamps
+ */
+async function realignWords(audioPath, words, startIdx, endIdx) {
+  // Clamp indices
+  startIdx = Math.max(0, startIdx);
+  endIdx = Math.min(words.length - 1, endIdx);
+
+  // Determine time range with 2-second context padding
+  const CONTEXT_PAD = 2; // seconds
+  const segStart = Math.max(0, words[startIdx].start - CONTEXT_PAD);
+  const segEnd = words[endIdx].end + CONTEXT_PAD;
+  const duration = segEnd - segStart;
+
+  log.info('Realigning words', { startIdx, endIdx, segStart, segEnd, duration });
+
+  // Extract audio segment to a temp file
+  const tmpDir = os.tmpdir();
+  const tmpFile = path.join(tmpDir, `realign-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
+
+  try {
+    // Extract segment with ffmpeg
+    await exec('ffmpeg', [
+      '-i', audioPath,
+      '-ss', String(segStart),
+      '-t', String(duration),
+      '-ar', '16000',
+      '-ac', '1',
+      '-f', 'wav',
+      '-y',
+      tmpFile,
+    ], { timeout: 30000 });
+
+    // Run whisper on the extracted segment
+    const outputBase = tmpFile.replace(/\.\w+$/, '');
+    const args = [
+      '-m', WHISPER_MODEL,
+      '-f', tmpFile,
+      '-oj',
+      '-ml', '1',
+      '--dtw', WHISPER_DTW,
+      '-of', outputBase,
+    ];
+
+    await exec(WHISPER_CLI, args, { timeout: 120000 });
+
+    // Parse whisper output
+    const jsonPath = `${outputBase}.json`;
+    const raw = await fs.readFile(jsonPath, 'utf-8');
+    const whisperOutput = JSON.parse(raw);
+    const segTranscript = transformWhisperOutput(whisperOutput);
+
+    // Clean up whisper output file
+    await fs.unlink(jsonPath).catch(() => {});
+
+    const newWords = segTranscript.words;
+
+    log.info('Whisper segment produced words', {
+      segmentWords: newWords.length,
+      editedRange: endIdx - startIdx + 1,
+    });
+
+    // Match new whisper words to the edited word range by position.
+    // The segment may contain context words before/after the edited range.
+    // We find the best positional offset by aligning the edited word count
+    // to the segment words.
+    const editedCount = endIdx - startIdx + 1;
+
+    if (newWords.length === 0) {
+      log.warn('Whisper produced no words for segment, skipping realignment');
+      return words;
+    }
+
+    // If whisper returned roughly the same number of words, align 1:1.
+    // Otherwise, use proportional mapping.
+    for (let i = 0; i < editedCount; i++) {
+      const wordIdx = startIdx + i;
+      // Map this edited word to a position in the whisper output
+      const mappedIdx = Math.round((i / editedCount) * newWords.length);
+      const whisperWord = newWords[Math.min(mappedIdx, newWords.length - 1)];
+
+      // Update timestamps — whisper times are relative to segment start,
+      // so add segStart to make them absolute
+      words[wordIdx] = {
+        ...words[wordIdx],
+        start: whisperWord.start + segStart,
+        end: whisperWord.end + segStart,
+        confidence: whisperWord.confidence,
+      };
+    }
+
+    log.info('Realignment complete', { updatedWords: editedCount });
+    return words;
+  } finally {
+    // Clean up temp audio file
+    await fs.unlink(tmpFile).catch(() => {});
+  }
+}
+
+module.exports = { transcribe, transcribeWithProgress, transformWhisperOutput, realignWords };

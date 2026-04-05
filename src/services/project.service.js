@@ -146,7 +146,77 @@ const ProjectService = {
     }
     log.info('File saved to disk', { projectId, filename });
 
-    // Extract metadata, audio, thumbnails
+    return this._processMedia(projectId, sourcePath, start);
+  },
+
+  /**
+   * Ingest a media file already present on the shared volume.
+   * No upload — just reference the path, copy/symlink into project, and process.
+   *
+   * @param {string} userId
+   * @param {object} opts - { name, filePath, templateId?, trackRoles? }
+   *   trackRoles: { "0": "main", "1": "camera", "2": "speaker", "3": "microphone" }
+   */
+  async ingest(userId, { name, filePath, templateId, trackRoles }) {
+    if (!filePath) throw new ValidationError('filePath is required');
+    if (!existsSync(filePath)) throw new ValidationError(`File not found: ${filePath}`);
+
+    // Create the project
+    const project = await this.create(userId, {
+      name: name || path.basename(filePath, path.extname(filePath)),
+      templateId,
+    });
+
+    const projectId = project.id;
+    log.info('Ingesting file from shared volume', { projectId, filePath });
+    const start = Date.now();
+
+    // Copy file into project (not symlink — keeps project self-contained)
+    const ext = path.extname(filePath) || '.mp4';
+    const sourcePath = projectPath(projectId, 'media', `source${ext}`);
+    await fs.copyFile(filePath, sourcePath);
+    log.info('File copied to project', { projectId, size: (await fs.stat(sourcePath)).size });
+
+    // Process media (metadata, audio extraction, thumbnails, waveform)
+    const metadata = await this._processMedia(projectId, sourcePath, start);
+
+    // Apply track roles if provided
+    if (trackRoles && typeof trackRoles === 'object') {
+      const tracksPath = projectPath(projectId, 'data', 'tracks.json');
+      const tracks = JSON.parse(await fs.readFile(tracksPath, 'utf-8'));
+      for (const [idx, role] of Object.entries(trackRoles)) {
+        const track = tracks[parseInt(idx)];
+        if (track) track.role = role;
+      }
+      await fs.writeFile(tracksPath, JSON.stringify(tracks, null, 2));
+      log.info('Track roles assigned', { projectId, roles: trackRoles });
+
+      // If a speaker role is assigned, extract that specific audio track for transcription
+      const speakerEntry = Object.entries(trackRoles).find(([, r]) => r === 'speaker');
+      if (speakerEntry) {
+        const allTracks = tracks;
+        const audioTracks = allTracks.filter(t => t.type === 'audio');
+        const speakerTrackGlobalIdx = parseInt(speakerEntry[0]);
+        const speakerTrack = allTracks[speakerTrackGlobalIdx];
+        if (speakerTrack && speakerTrack.type === 'audio') {
+          // Find the audio-stream-relative index
+          const audioStreamIdx = audioTracks.indexOf(speakerTrack);
+          if (audioStreamIdx >= 0) {
+            log.info('Extracting speaker audio track', { projectId, trackIndex: speakerTrackGlobalIdx, audioStreamIdx });
+            const speakerAudioPath = projectPath(projectId, 'media', 'audio.wav');
+            await MediaService.extractAudio(sourcePath, speakerAudioPath, audioStreamIdx);
+          }
+        }
+      }
+    }
+
+    return { project, metadata };
+  },
+
+  /**
+   * Shared media processing: metadata extraction, audio, thumbnails, waveform, DB update.
+   */
+  async _processMedia(projectId, sourcePath, start) {
     log.info('Extracting metadata', { projectId });
     const metadata = await MediaService.extractMetadata(sourcePath);
     log.info('Metadata extracted', {
@@ -162,7 +232,10 @@ const ProjectService = {
 
     log.info('Extracting audio', { projectId });
     const audioPath = projectPath(projectId, 'media', 'audio.wav');
-    await MediaService.extractAudio(sourcePath, audioPath);
+    // Only extract if not already done (ingest with speaker role may have already extracted)
+    if (!existsSync(audioPath)) {
+      await MediaService.extractAudio(sourcePath, audioPath);
+    }
 
     log.info('Generating thumbnails', { projectId });
     await MediaService.generateThumbnails(sourcePath, projectPath(projectId, 'media', 'thumbnails'));
@@ -189,8 +262,33 @@ const ProjectService = {
       status: 'editing',
     });
 
-    log.info('Import complete', { projectId, durationMs: Date.now() - start });
+    log.info('Processing complete', { projectId, durationMs: Date.now() - start });
     return metadata;
+  },
+
+  /**
+   * Re-extract audio from a specific track. Used when user reassigns track roles.
+   * @param {number} audioStreamIndex - 0-based index among audio streams
+   */
+  async extractAudioTrack(projectId, userId, audioStreamIndex = 0) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+    if (!project.media_path || !existsSync(project.media_path)) {
+      throw new ValidationError('No source media found');
+    }
+
+    log.info('Re-extracting audio track', { projectId, audioStreamIndex });
+    const audioPath = projectPath(projectId, 'media', 'audio.wav');
+    await MediaService.extractAudio(project.media_path, audioPath, audioStreamIndex);
+
+    // Re-extract waveform
+    try {
+      await MediaService.extractWaveform(audioPath, projectPath(projectId, 'data', 'waveform.json'), 100);
+    } catch (err) {
+      log.warn('Waveform re-extraction failed', { projectId, error: err.message });
+    }
+
+    log.info('Audio track re-extracted', { projectId, audioStreamIndex });
   },
 
   async transcribe(projectId, userId) {

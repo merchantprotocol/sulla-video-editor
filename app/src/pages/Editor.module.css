@@ -129,6 +129,9 @@
 .filler { color: var(--red); text-decoration: underline; text-decoration-color: var(--red); text-decoration-style: wavy; text-underline-offset: 3px; opacity: 0.7; cursor: pointer; }
 .cut { text-decoration: line-through; color: var(--text-dim); opacity: 0.3; }
 .cut:hover { opacity: 0.5; text-decoration-color: var(--green); }
+.lowConfidence { border-bottom: 2px dotted var(--yellow); }
+.lowConfidence:hover { background: var(--yellow-soft); }
+.wordInput { display: inline-block; font: inherit; font-size: inherit; line-height: inherit; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; outline: none; min-width: 30px; vertical-align: baseline; }
 
 .silence { display: inline-flex; align-items: center; gap: 3px; padding: 0 4px; font-size: 10px; font-family: var(--mono); color: var(--yellow); opacity: 0.6; vertical-align: baseline; cursor: pointer; border-radius: 3px; transition: all 0.15s; border-bottom: 1px dashed var(--yellow); }
 .silence:hover { background: var(--yellow-soft); opacity: 1; }

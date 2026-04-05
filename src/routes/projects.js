@@ -10,11 +10,13 @@ router.use(requireAuth);
 
 router.get('/', ProjectController.list);
 router.post('/', validate({ name: 'string' }), ProjectController.create);
+router.post('/ingest', validate({ filePath: 'string' }), ProjectController.ingest);
 router.get('/:id', ProjectController.get);
 router.put('/:id', ProjectController.update);
 router.delete('/:id', ProjectController.delete);
 
 router.post('/:id/import', ProjectController.importMedia);
+router.post('/:id/extract-audio', ProjectController.extractAudioTrack);
 router.post('/:id/transcribe', ProjectController.transcribe);
 router.get('/:id/transcript', ProjectController.getTranscript);
 router.put('/:id/transcript', ProjectController.saveTranscript);
@@ -23,6 +25,7 @@ router.put('/:id/edl', ProjectController.saveEdl);
 router.get('/:id/waveform', ProjectController.getWaveform);
 router.get('/:id/suggestions', ProjectController.getSuggestions);
 router.post('/:id/captions', ProjectController.generateCaptions);
+router.post('/:id/realign', ProjectController.realignWords);
 router.post('/:id/analyze', ProjectController.analyze);
 router.put('/:id/tracks', ProjectController.saveTracks);
 router.get('/:id/overlays', ProjectController.getOverlays);

@@ -11,6 +11,8 @@ module.exports = {
   whisperModel: process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggml-base.en.bin',
   sullaChatUrl: process.env.SULLA_CHAT_URL || 'http://localhost:3000/v1/chat/completions',
   sullaBearerToken: process.env.SULLA_BEARER_TOKEN || null,
+  inboxDir: process.env.INBOX_DIR || null,
+  inboxTemplateId: process.env.INBOX_TEMPLATE_ID || 'system-screencast',
   fillerWords: new Set([
     'um', 'uh', 'like', 'basically', 'actually', 'literally',
     'right', 'okay', 'so', 'well', 'you know', 'i mean',

@@ -14,6 +14,8 @@ services:
       - SULLA_API_KEY=${SULLA_API_KEY:-}
       - SULLA_CHAT_URL=${SULLA_CHAT_URL:-}
       - SULLA_BEARER_TOKEN=${SULLA_BEARER_TOKEN:-}
+      - INBOX_DIR=${INBOX_DIR:-/var/www/html/storage/inbox}
+      - INBOX_TEMPLATE_ID=${INBOX_TEMPLATE_ID:-system-screencast}
       - WAZUH_MANAGER=${WAZUH_MANAGER:-}
       - WAZUH_AGENT_NAME=${WAZUH_AGENT_NAME:-}
     depends_on:

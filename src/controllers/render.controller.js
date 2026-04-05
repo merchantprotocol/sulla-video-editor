@@ -1,6 +1,10 @@
+const path = require('path');
+const { existsSync } = require('fs');
+const fs = require('fs/promises');
 const RenderService = require('../services/render.service');
 const ProjectRepository = require('../repositories/project.repository');
 const { NotFoundError } = require('../utils/errors');
+const config = require('../utils/config');
 
 const RenderController = {
   async render(req, res, next) {
@@ -103,6 +107,37 @@ const RenderController = {
 
       unlinkSync(filePath);
       res.json({ deleted: true });
+    } catch (err) { next(err); }
+  },
+
+  /**
+   * POST /api/projects/:id/render/composed
+   * Render with PiP composition, audio track selection, and caption burn-in.
+   * Reads template composition config from project's template_config or request body.
+   */
+  async renderComposed(req, res, next) {
+    try {
+      const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
+      if (!project) throw new NotFoundError('Project not found');
+
+      const { format, resolution, quality, studioSound, normalizeAudio } = req.body;
+
+      // Load composition config — from request body, project template_config, or template file
+      let composition = req.body.composition;
+      if (!composition && project.template_config) {
+        const tc = typeof project.template_config === 'string'
+          ? JSON.parse(project.template_config)
+          : project.template_config;
+        composition = tc.composition || {};
+      }
+
+      const result = await RenderService.renderComposed(project.id, {
+        format, resolution, quality, composition,
+        studioSound, normalizeAudio,
+      });
+
+      await ProjectRepository.update(project.id, { status: 'exported' });
+      res.json({ status: 'complete', ...result });
     } catch (err) { next(err); }
   },
 };

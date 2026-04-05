@@ -76,10 +76,12 @@ async function extractMetadata(filePath) {
 
 /**
  * Extract audio to WAV (16kHz mono for Whisper)
+ * @param {number} trackIndex - audio stream index (0-based among audio streams). Default: 0 (first audio)
  */
-async function extractAudio(inputPath, outputPath) {
+async function extractAudio(inputPath, outputPath, trackIndex = 0) {
   await exec('ffmpeg', [
     '-i', inputPath,
+    '-map', `0:a:${trackIndex}`,  // specific audio stream
     '-vn',              // no video
     '-ar', '16000',     // 16kHz sample rate (whisper requirement)
     '-ac', '1',         // mono

@@ -64,6 +64,8 @@ export default function Editor() {
   const [titleDraft, setTitleDraft] = useState('')
   const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null)
   const [speakerDraft, setSpeakerDraft] = useState('')
+  const [editingWordIdx, setEditingWordIdx] = useState<number | null>(null)
+  const [wordDraft, setWordDraft] = useState('')
 
   const cmdInputRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -416,6 +418,59 @@ export default function Editor() {
     } catch { toast('Failed to rename speaker') }
   }
 
+  // ─── Word editing ───────────────────────────────────────
+  function startEditWord(idx: number) {
+    if (!transcript) return
+    const word = transcript.words[idx]
+    if (!word) return
+    setEditingWordIdx(idx)
+    setWordDraft(word.word)
+  }
+
+  async function commitWordEdit() {
+    const idx = editingWordIdx
+    setEditingWordIdx(null)
+    if (idx == null || !transcript) return
+    const newText = wordDraft.trim()
+    if (!newText) return
+    const word = transcript.words[idx]
+    if (!word || word.word === newText) return
+
+    // Update word text
+    const oldText = word.word
+    word.word = newText
+    // Check if it's now a filler word
+    const fillerWords = new Set(['um', 'uh', 'like', 'basically', 'actually', 'literally', 'right', 'okay', 'so', 'well', 'you know', 'i mean'])
+    word.filler = fillerWords.has(newText.toLowerCase().replace(/[.,!?]/g, ''))
+
+    // Save transcript
+    try {
+      await api.put(`/projects/${id}/transcript`, transcript)
+      toast(`"${oldText}" → "${newText}"`)
+    } catch { toast('Failed to save word edit') }
+
+    // Request re-alignment for this word and neighbors (fire-and-forget)
+    const startIdx = Math.max(0, idx - 2)
+    const endIdx = Math.min(transcript.words.length - 1, idx + 2)
+    api.post(`/projects/${id}/realign`, { startIdx, endIdx }).then(async (result: any) => {
+      if (result.words && transcript) {
+        // Update timestamps from realignment
+        for (let i = startIdx; i <= endIdx && i < result.words.length + startIdx; i++) {
+          const aligned = result.words[i - startIdx]
+          if (aligned && transcript.words[i]) {
+            transcript.words[i].start = aligned.start
+            transcript.words[i].end = aligned.end
+            if (aligned.confidence != null) transcript.words[i].confidence = aligned.confidence
+          }
+        }
+        setTranscript({ ...transcript })
+        await api.put(`/projects/${id}/transcript`, transcript).catch(() => {})
+      }
+    }).catch(() => {
+      // Re-alignment is best-effort — don't bother the user if it fails
+    })
+  }
+
   // ─── Hook fix — cut the weak opening ──────────────────
   function handleHookFix() {
     if (!transcript || transcript.words.length === 0) { toast('No transcript loaded'); return }
@@ -681,6 +736,13 @@ export default function Editor() {
       if (keepEnd < (project.duration_ms || 0)) editor.addCut(Math.round(keepEnd), project.duration_ms || Math.round(keepEnd + 1000), 'keep-only:after')
       sel.removeAllRanges()
       toast(`Kept ${selectedWords.length} words, cut the rest`)
+    } else if (action === 'editWord') {
+      const idx = ctxMenu?.wordIdx
+      if (idx != null) {
+        startEditWord(idx)
+      } else {
+        toast('Right-click on a word to edit it')
+      }
     } else if (action === 'addBroll') {
       // Insert B-Roll marker at the right-clicked word position
       const idx = ctxMenu?.wordIdx
@@ -1238,11 +1300,29 @@ export default function Editor() {
                         const cut = editor.isCut(word.start * 1000, word.end * 1000)
                         const isCurrent = currentTime >= word.start && currentTime < word.end
 
+                        const lowConf = word.confidence != null && word.confidence < 0.7
+
+                        if (editingWordIdx === item.idx) {
+                          return (
+                            <input
+                              key={`w${item.idx}`}
+                              className={styles.wordInput}
+                              value={wordDraft}
+                              onChange={e => setWordDraft(e.target.value)}
+                              onBlur={commitWordEdit}
+                              onKeyDown={e => { if (e.key === 'Enter') commitWordEdit(); if (e.key === 'Escape') setEditingWordIdx(null) }}
+                              autoFocus
+                              style={{ width: Math.max(30, wordDraft.length * 8 + 16) }}
+                            />
+                          )
+                        }
+
                         return (
                           <span
                             key={`w${item.idx}`}
                             data-word-idx={item.idx}
-                            className={`${styles.word} ${word.filler ? styles.filler : ''} ${cut ? styles.cut : ''}`}
+                            className={`${styles.word} ${word.filler ? styles.filler : ''} ${cut ? styles.cut : ''} ${lowConf ? styles.lowConfidence : ''}`}
+                            title={lowConf ? `Low confidence: ${Math.round((word.confidence || 0) * 100)}%` : undefined}
                             onClick={() => {
                               const sel = window.getSelection()
                               if (sel && !sel.isCollapsed) return
@@ -1251,6 +1331,10 @@ export default function Editor() {
                               } else {
                                 seekTo(word.start)
                               }
+                            }}
+                            onDoubleClick={(e) => {
+                              e.preventDefault()
+                              startEditWord(item.idx)
                             }}
                           >
                             {isCurrent && <span className={styles.playhead} />}
@@ -1650,6 +1734,12 @@ export default function Editor() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copy <span className={styles.ctxShortcut}>{'\u2318'}C</span>
           </button>
+          {ctxMenu?.wordIdx != null && (
+            <button className={styles.ctxItem} onClick={() => ctxAction('editWord')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit Word
+            </button>
+          )}
           <div className={styles.ctxDivider} />
           <button className={`${styles.ctxItem} ${styles.ctxItemDanger}`} onClick={() => ctxAction('delete')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>

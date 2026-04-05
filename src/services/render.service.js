@@ -477,9 +477,192 @@ function renderWithProgress(projectId, options = {}) {
   return emitter;
 }
 
+/**
+ * Render a composed video with PiP overlay, audio track selection, and caption burn-in.
+ * Driven by the template's `composition` config and `trackRoles`.
+ *
+ * @param {string} projectId
+ * @param {object} options - { format, resolution, quality, composition, tracks }
+ *   composition: { main: { source }, pip: { enabled, source, position, size, shape, margin, border },
+ *                  captions: { enabled, burnIn } }
+ *   tracks: array from tracks.json (with role field)
+ */
+async function renderComposed(projectId, options = {}) {
+  const {
+    format = '16:9',
+    resolution = '1080p',
+    quality = 'high',
+    composition = {},
+    studioSound = false,
+    normalizeAudio = false,
+    targetLufs = -14,
+  } = options;
+
+  log.info('Starting composed render', { projectId, format, resolution });
+  const start = Date.now();
+
+  const projectDir = path.join(config.storageRoot, projectId);
+  const mediaDir = path.join(projectDir, 'media');
+  const dataDir = path.join(projectDir, 'data');
+  const exportsDir = path.join(projectDir, 'exports');
+
+  const sourceFile = findSourceFile(mediaDir);
+  if (!sourceFile) throw new ValidationError('No source media found');
+
+  // Load tracks with roles
+  const tracksPath = path.join(dataDir, 'tracks.json');
+  let tracks = [];
+  if (existsSync(tracksPath)) {
+    tracks = JSON.parse(await fs.readFile(tracksPath, 'utf-8'));
+  }
+
+  // Load EDL
+  const edlPath = path.join(dataDir, 'edl.json');
+  let edl = { version: 1, cuts: [] };
+  if (existsSync(edlPath)) {
+    edl = JSON.parse(await fs.readFile(edlPath, 'utf-8'));
+  }
+
+  // Get source duration
+  const { stdout } = await exec('ffprobe', [
+    '-v', 'quiet', '-show_entries', 'format=duration',
+    '-of', 'csv=p=0', sourceFile,
+  ]);
+  const durationMs = Math.round(parseFloat(stdout.trim()) * 1000);
+
+  // Output dimensions
+  const resMap = { '1080p': '1920:1080', '720p': '1280:720', '4k': '3840:2160' };
+  const res = resMap[resolution] || '1920:1080';
+  const [outW, outH] = res.split(':').map(Number);
+  const dims = getOutputDimensions(format, outW, outH);
+
+  const outputName = `composed-${format.replace(/[:/]/g, 'x')}-${resolution}.mp4`;
+  const outputPath = path.join(exportsDir, outputName);
+  await fs.mkdir(exportsDir, { recursive: true });
+
+  // Resolve track indices by role
+  const videoTracks = tracks.filter(t => t.type === 'video');
+  const audioTracks = tracks.filter(t => t.type === 'audio');
+
+  function findTrackByRole(pool, role, fallbackIdx = 0) {
+    const match = pool.find(t => t.role === role);
+    return match ? pool.indexOf(match) : fallbackIdx;
+  }
+
+  const mainVideoIdx = findTrackByRole(videoTracks, 'main', 0);
+  const pipVideoIdx = findTrackByRole(videoTracks, 'camera', videoTracks.length > 1 ? 1 : -1);
+  const speakerAudioIdx = findTrackByRole(audioTracks, 'speaker', 0);
+
+  const pip = composition.pip || {};
+  const captions = composition.captions || {};
+
+  // Build filter graph
+  const filters = [];
+  let videoOut = '';
+
+  // Scale main video to output dimensions
+  filters.push(`[0:v:${mainVideoIdx}]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2[main]`);
+  videoOut = '[main]';
+
+  // PiP overlay
+  if (pip.enabled !== false && pipVideoIdx >= 0 && pipVideoIdx < videoTracks.length) {
+    const pipSize = pip.size || 280;
+    const margin = pip.margin || 24;
+    const pos = pip.position || 'bottom-right';
+
+    // Scale PiP — if circle, make it square
+    const pipW = pipSize;
+    const pipH = pip.shape === 'circle' ? pipSize : Math.round(pipSize * 9 / 16);
+    filters.push(`[0:v:${pipVideoIdx}]scale=${pipW}:${pipH}:force_original_aspect_ratio=decrease,pad=${pipW}:${pipH}:(ow-iw)/2:(oh-ih)/2${pip.shape === 'circle' ? `,geq=lum='lum(X,Y)':a='if(gt(pow(X-${pipW}/2,2)+pow(Y-${pipH}/2,2),pow(${Math.floor(pipW/2)},2)),0,255)'` : ''}[pip]`);
+
+    // Position calculation
+    let overlayX, overlayY;
+    switch (pos) {
+      case 'top-left':     overlayX = margin; overlayY = margin; break;
+      case 'top-right':    overlayX = `W-w-${margin}`; overlayY = margin; break;
+      case 'bottom-left':  overlayX = margin; overlayY = `H-h-${margin}`; break;
+      case 'bottom-right':
+      default:             overlayX = `W-w-${margin}`; overlayY = `H-h-${margin}`; break;
+    }
+
+    filters.push(`${videoOut}[pip]overlay=${overlayX}:${overlayY}[composed]`);
+    videoOut = '[composed]';
+  }
+
+  // Caption burn-in
+  const captionPath = path.join(dataDir, 'captions.ass');
+  if (captions.enabled !== false && captions.burnIn !== false && existsSync(captionPath)) {
+    // ASS subtitles filter — need to escape path colons on some platforms
+    const escapedPath = captionPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+    filters.push(`${videoOut}ass='${escapedPath}'[captioned]`);
+    videoOut = '[captioned]';
+  }
+
+  // Build FFmpeg args
+  const args = ['-i', sourceFile, '-y'];
+
+  if (filters.length > 0) {
+    args.push('-filter_complex', filters.join('; '));
+    args.push('-map', videoOut);
+  }
+
+  // Map the speaker audio track
+  args.push('-map', `0:a:${speakerAudioIdx}`);
+
+  // Audio enhancement
+  const audioFilters = [];
+  if (studioSound) {
+    audioFilters.push('highpass=f=80', 'lowpass=f=12000');
+    audioFilters.push('acompressor=threshold=-20dB:ratio=4:attack=5:release=50');
+    audioFilters.push('equalizer=f=3000:t=q:w=1.5:g=3');
+    audioFilters.push('equalizer=f=200:t=q:w=1:g=-2');
+  }
+  if (normalizeAudio) {
+    audioFilters.push(`loudnorm=I=${targetLufs}:TP=-1.5:LRA=11`);
+  }
+  if (audioFilters.length > 0) {
+    args.push('-af', audioFilters.join(','));
+  }
+
+  // Codec settings
+  const crf = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
+  args.push('-c:v', 'libx264', '-crf', crf, '-preset', 'medium');
+  args.push('-c:a', 'aac', '-b:a', '192k');
+  args.push('-movflags', '+faststart');
+  args.push(outputPath);
+
+  log.info('Composed render FFmpeg args', { projectId, argCount: args.length });
+
+  await runFFmpeg(args);
+
+  const stat = await fs.stat(outputPath);
+  const result = {
+    path: outputPath,
+    name: outputName,
+    size: stat.size,
+    format,
+    resolution,
+    cuts_applied: edl.cuts.length,
+    original_duration_ms: durationMs,
+    edited_duration_ms: durationMs,
+    composed: true,
+    pip: pip.enabled !== false && pipVideoIdx >= 0,
+    captions_burned: captions.burnIn !== false && existsSync(captionPath),
+  };
+
+  log.info('Composed render complete', {
+    projectId, output: outputName, size: stat.size,
+    pip: result.pip, captions: result.captions_burned,
+    durationMs: Date.now() - start,
+  });
+
+  return result;
+}
+
 module.exports = {
   render,
   renderClip,
+  renderComposed,
   renderWithProgress,
   buildSelectFilter,
   buildConcatFilter,

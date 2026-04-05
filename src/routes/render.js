@@ -15,6 +15,7 @@ const renderValidation = validate({
 
 router.post('/:id/render', renderValidation, RenderController.render);
 router.post('/:id/render/stream', renderValidation, RenderController.renderStream);
+router.post('/:id/render/composed', renderValidation, RenderController.renderComposed);
 router.post('/:id/clips', RenderController.renderClip);
 router.get('/:id/exports/:filename', RenderController.serveExport);
 router.delete('/:id/exports/:filename', RenderController.deleteExport);

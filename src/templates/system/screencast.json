@@ -1,0 +1,58 @@
+{
+  "name": "Screencast",
+  "slug": "screencast",
+  "description": "Screen recording with camera PiP overlay. Optimized for tutorials, demos, and walkthroughs with speaker audio transcription and captions.",
+  "theme": {
+    "accentColor": "#5096b3",
+    "background": "dark",
+    "fontFamily": "Inter",
+    "captionStyle": "box"
+  },
+  "trackRoles": {
+    "video": [
+      { "role": "main", "label": "Screen Recording", "heuristic": "highest-resolution" },
+      { "role": "camera", "label": "Camera", "heuristic": "lowest-resolution" }
+    ],
+    "audio": [
+      { "role": "speaker", "label": "Speaker Audio", "heuristic": "first" },
+      { "role": "microphone", "label": "Microphone", "heuristic": "second" }
+    ]
+  },
+  "composition": {
+    "main": {
+      "source": "main",
+      "fit": "cover"
+    },
+    "pip": {
+      "enabled": true,
+      "source": "camera",
+      "position": "bottom-right",
+      "size": 280,
+      "shape": "circle",
+      "border": { "width": 3, "color": "#ffffff" },
+      "margin": 24,
+      "opacity": 1.0
+    },
+    "captions": {
+      "enabled": true,
+      "source": "speaker",
+      "position": "bottom",
+      "fontSize": 36,
+      "maxWordsPerLine": 4,
+      "burnIn": true
+    }
+  },
+  "rules": {
+    "removeFillers": true,
+    "trimSilence": { "enabled": true, "thresholdMs": 1500 },
+    "studioSound": false,
+    "normalize": { "enabled": true, "targetLufs": -14 },
+    "autoCaptions": true,
+    "autoClips": false
+  },
+  "export": {
+    "defaultFormat": "16:9",
+    "defaultResolution": "1080p",
+    "defaultCodec": "h264"
+  }
+}

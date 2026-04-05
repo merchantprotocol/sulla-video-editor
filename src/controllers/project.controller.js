@@ -4,7 +4,8 @@ const config = require('../utils/config');
 const ProjectService = require('../services/project.service');
 const ProjectRepository = require('../repositories/project.repository');
 const { writeCaptionFile } = require('../services/caption.service');
-const { NotFoundError } = require('../utils/errors');
+const TranscribeService = require('../services/transcribe');
+const { NotFoundError, ValidationError } = require('../utils/errors');
 
 const ProjectController = {
   async list(req, res, next) {
@@ -210,6 +211,62 @@ const ProjectController = {
 
       const captionPath = await writeCaptionFile(projectDir, transcript, edl, mappedOptions);
       res.json({ status: 'ok', path: captionPath });
+    } catch (err) { next(err); }
+  },
+
+  /**
+   * POST /api/projects/ingest
+   * Ingest a file already on the shared volume. No upload needed.
+   * Body: { name?, filePath, templateId?, trackRoles? }
+   */
+  async extractAudioTrack(req, res, next) {
+    try {
+      const audioStreamIndex = parseInt(req.body.audioStreamIndex) || 0;
+      await ProjectService.extractAudioTrack(req.params.id, req.userId, audioStreamIndex);
+      res.json({ status: 'ok', audioStreamIndex });
+    } catch (err) { next(err); }
+  },
+
+  async ingest(req, res, next) {
+    try {
+      const { name, filePath, templateId, trackRoles } = req.body;
+      const result = await ProjectService.ingest(req.userId, { name, filePath, templateId, trackRoles });
+      res.json({ status: 'ingested', project: result.project, metadata: result.metadata });
+    } catch (err) { next(err); }
+  },
+
+  async realignWords(req, res, next) {
+    try {
+      const { startIdx, endIdx } = req.body;
+      if (startIdx == null || endIdx == null) {
+        throw new ValidationError('startIdx and endIdx are required');
+      }
+
+      const project = await ProjectRepository.findByIdAndUser(req.params.id, req.userId);
+      if (!project) throw new NotFoundError('Project not found');
+
+      const projectDir = path.join(config.storageRoot, project.id);
+      const transcriptPath = path.join(projectDir, 'data', 'transcript.json');
+      const audioPath = path.join(projectDir, 'media', 'audio.wav');
+
+      const transcript = JSON.parse(await fs.readFile(transcriptPath, 'utf-8'));
+
+      if (!transcript.words || transcript.words.length === 0) {
+        throw new ValidationError('Transcript has no words');
+      }
+      if (startIdx < 0 || endIdx >= transcript.words.length || startIdx > endIdx) {
+        throw new ValidationError('Invalid startIdx/endIdx range');
+      }
+
+      const updatedWords = await TranscribeService.realignWords(
+        audioPath, transcript.words, startIdx, endIdx
+      );
+
+      // Save updated transcript
+      transcript.words = updatedWords;
+      await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 2));
+
+      res.json({ status: 'ok', words: updatedWords });
     } catch (err) { next(err); }
   },
 };

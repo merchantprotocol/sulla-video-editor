@@ -68,4 +68,27 @@ app.use(errorHandler);
 
 app.listen(config.port, '0.0.0.0', () => {
   log.info(`Server started on port ${config.port}`, { pid: process.pid, nodeVersion: process.version });
+
+  // Start inbox watcher (auto-ingest files from shared folder)
+  if (config.inboxDir) {
+    const InboxService = require('./services/inbox.service');
+    const ProjectService = require('./services/project.service');
+    const UserRepository = require('./repositories/user.repository');
+
+    InboxService.startWatching(async (filePath, filename) => {
+      // Use the first user as the ingest owner (local single-machine app)
+      const users = await UserRepository.findAll();
+      if (!users || users.length === 0) {
+        log.warn('Inbox: no users found — skipping ingest');
+        return;
+      }
+      const userId = users[0].id;
+      const projectName = path.basename(filename, path.extname(filename));
+      await ProjectService.ingest(userId, {
+        name: projectName,
+        filePath,
+        templateId: config.inboxTemplateId,
+      });
+    });
+  }
 });
