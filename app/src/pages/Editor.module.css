@@ -314,6 +314,13 @@
 
 /* Waveform bars */
 .waveBars { display: flex; align-items: center; gap: 1px; height: 100%; padding: 5px 4px; }
+
+/* Transcript words on audio track (Descript-style) */
+.trackWords { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.trackWord { position: absolute; top: 3px; bottom: 3px; background: rgba(26,127,55,0.15); border-radius: 2px; font-size: 8px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 1px; border-left: 1px solid rgba(26,127,55,0.25); transition: opacity 0.12s; cursor: default; }
+.trackWord:hover { background: rgba(26,127,55,0.25); color: var(--text-secondary); z-index: 2; }
+.trackWordFiller { background: rgba(207,34,46,0.1); border-left-color: rgba(207,34,46,0.3); color: var(--red); opacity: 0.6; }
+.trackWordCut { opacity: 0.1; background: transparent; text-decoration: line-through; }
 .wb { width: 2px; border-radius: 1px; flex-shrink: 0; }
 
 /* Cut regions on tracks */

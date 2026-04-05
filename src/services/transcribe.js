@@ -9,21 +9,30 @@ const exec = promisify(execFile);
 const WHISPER_CLI = process.env.WHISPER_CLI || 'whisper-cli';
 const WHISPER_MODEL = process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggml-base.en.bin';
 
+// Enable Dynamic Time Warping for more accurate word-level timestamps.
+// DTW aligns the audio spectrogram to token boundaries, reducing drift
+// from ~100-200ms to ~20-50ms. Requires a tdrz or tiny-diarize model for
+// best results, but improves any model.
+const WHISPER_DTW = process.env.WHISPER_DTW || 'tiny.en';
+
 /**
  * Run whisper.cpp on an audio file and return structured transcript
  */
 async function transcribe(audioPath) {
   const outputBase = audioPath.replace(/\.\w+$/, '');
 
-  // Run whisper.cpp with JSON output and word-level timestamps
-  await exec(WHISPER_CLI, [
+  // Run whisper.cpp with JSON output, word-level timestamps, and DTW alignment
+  const args = [
     '-m', WHISPER_MODEL,
     '-f', audioPath,
-    '-oj',          // output JSON
-    '-ml', '1',     // max segment length (word-level)
-    '-pp',          // print progress
-    '-of', outputBase, // output file base name
-  ], {
+    '-oj',                   // output JSON
+    '-ml', '1',              // max segment length (word-level)
+    '-pp',                   // print progress
+    '--dtw', WHISPER_DTW,    // Dynamic Time Warping for precise token alignment
+    '-of', outputBase,       // output file base name
+  ];
+
+  await exec(WHISPER_CLI, args, {
     timeout: 600000, // 10 min timeout for long files
   });
 
@@ -55,6 +64,7 @@ function transcribeWithProgress(audioPath) {
     '-oj',
     '-ml', '1',
     '-pp',
+    '--dtw', WHISPER_DTW,
     '-of', outputBase,
   ], { timeout: 600000 });
 
@@ -113,10 +123,18 @@ function transformWhisperOutput(whisperOutput) {
         const word = (token.text || '').trim();
         if (!word) continue;
 
+        // Prefer DTW timestamps (t_dtw) when available — they are
+        // aligned to the audio spectrogram and far more accurate than
+        // the default t0/t1 centisecond timestamps.
+        const startSec = token.t_dtw != null
+          ? token.t_dtw / 100
+          : token.t0 != null ? token.t0 / 100 : segment.offsets?.from / 1000;
+        const endSec = token.t1 != null ? token.t1 / 100 : segment.offsets?.to / 1000;
+
         const entry = {
           word,
-          start: token.t0 != null ? token.t0 / 100 : segment.offsets?.from / 1000,
-          end: token.t1 != null ? token.t1 / 100 : segment.offsets?.to / 1000,
+          start: startSec,
+          end: endSec,
           confidence: token.p || 0.9,
           speaker: 's1',
         };

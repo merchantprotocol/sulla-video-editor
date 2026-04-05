@@ -9,6 +9,10 @@ const log = require('../utils/logger').create('render');
 
 const exec = promisify(execFile);
 
+// Duration in ms of the micro-fade applied at each cut boundary
+// to eliminate audio pops/clicks from hard cuts.
+const CROSSFADE_MS = 5;
+
 /**
  * Build an FFmpeg select filter expression from an EDL.
  * This creates a filter that keeps only the non-cut portions.
@@ -45,6 +49,55 @@ function buildSelectFilter(edl, durationMs) {
     .join('+');
 
   return { selectExpr, keeps };
+}
+
+/**
+ * Build a concat-based filter graph that applies micro-fades at each
+ * cut boundary. This eliminates the audible pops/clicks caused by
+ * hard frame cuts in the select/aselect approach.
+ *
+ * For each kept segment we:
+ *  1. Trim the source to that range
+ *  2. Apply a short fade-out at the end and fade-in at the start
+ *  3. Concat all segments
+ */
+function buildConcatFilter(keeps) {
+  const fadeSec = (CROSSFADE_MS / 1000).toFixed(4);
+  const vParts = [];
+  const aParts = [];
+  const filters = [];
+
+  for (let i = 0; i < keeps.length; i++) {
+    const k = keeps[i];
+    const dur = (k.end - k.start).toFixed(4);
+    const start = k.start.toFixed(4);
+
+    // Trim video + audio for this segment
+    filters.push(`[0:v]trim=start=${start}:duration=${dur},setpts=PTS-STARTPTS`);
+    // Micro fade-in on first frame, fade-out on last frame
+    if (i > 0) filters[filters.length - 1] += `,fade=t=in:st=0:d=${fadeSec}`;
+    if (i < keeps.length - 1) {
+      const fadeStart = (k.end - k.start - CROSSFADE_MS / 1000).toFixed(4);
+      filters[filters.length - 1] += `,fade=t=out:st=${fadeStart}:d=${fadeSec}`;
+    }
+    filters[filters.length - 1] += `[v${i}]`;
+    vParts.push(`[v${i}]`);
+
+    filters.push(`[0:a]atrim=start=${start}:duration=${dur},asetpts=PTS-STARTPTS`);
+    if (i > 0) filters[filters.length - 1] += `,afade=t=in:st=0:d=${fadeSec}`;
+    if (i < keeps.length - 1) {
+      const fadeStart = (k.end - k.start - CROSSFADE_MS / 1000).toFixed(4);
+      filters[filters.length - 1] += `,afade=t=out:st=${fadeStart}:d=${fadeSec}`;
+    }
+    filters[filters.length - 1] += `[a${i}]`;
+    aParts.push(`[a${i}]`);
+  }
+
+  // Concat all segments
+  filters.push(`${vParts.join('')}concat=n=${keeps.length}:v=1:a=0[outv]`);
+  filters.push(`${aParts.join('')}concat=n=${keeps.length}:v=0:a=1[outa]`);
+
+  return { filterGraph: filters.join('; '), keeps };
 }
 
 /**
@@ -99,25 +152,25 @@ async function render(projectId, options = {}) {
   // Build FFmpeg args
   const args = ['-i', sourceFile, '-y'];
 
-  // Video filters
-  const vFilters = [];
-
   // Apply EDL cuts
   const selectResult = buildSelectFilter(edl, durationMs);
-  if (selectResult) {
-    vFilters.push(`select='${selectResult.selectExpr}'`);
-    vFilters.push('setpts=N/FRAME_RATE/TB');
-  }
 
-  // Scale + crop for target format
-  vFilters.push(`scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease`);
-  vFilters.push(`pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+  if (selectResult && selectResult.keeps.length > 1) {
+    // Use concat filter graph with micro-fades for clean cut transitions
+    const { filterGraph } = buildConcatFilter(selectResult.keeps);
 
-  args.push('-vf', vFilters.join(','));
-
-  // Audio filters (apply same cuts)
-  if (selectResult) {
-    args.push('-af', `aselect='${selectResult.selectExpr}',asetpts=N/SR/TB`);
+    // Append scale/pad to the concat output
+    const scaleFilter = `[outv]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2[finalv]`;
+    args.push('-filter_complex', `${filterGraph}; ${scaleFilter}`);
+    args.push('-map', '[finalv]', '-map', '[outa]');
+  } else if (selectResult && selectResult.keeps.length === 1) {
+    // Single keep segment — just trim, no concat needed
+    const k = selectResult.keeps[0];
+    args.push('-ss', k.start.toFixed(3), '-t', (k.end - k.start).toFixed(3));
+    args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+  } else {
+    // No cuts — just scale
+    args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
   }
 
   // Codec settings
@@ -246,6 +299,7 @@ module.exports = {
   render,
   renderClip,
   buildSelectFilter,
+  buildConcatFilter,
   getOutputDimensions,
   findSourceFile,
 };

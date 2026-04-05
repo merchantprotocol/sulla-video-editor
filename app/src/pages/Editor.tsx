@@ -66,19 +66,23 @@ export default function Editor() {
     }, 1000)
   }, [editor.undoCount])
 
-  // EDL-aware playback: skip cut regions
+  // EDL-aware playback: skip cut regions using rAF for frame-accurate seeking
   useEffect(() => {
     if (!isPlaying || !videoRef.current) return
-    const interval = setInterval(() => {
+    let rafId: number
+    function tick() {
       const v = videoRef.current
-      if (!v || v.paused) return
+      if (!v || v.paused) { rafId = requestAnimationFrame(tick); return }
       const timeMs = v.currentTime * 1000
       const next = editor.nextPlayableTime(timeMs)
-      if (next > timeMs + 50) {
+      if (next > timeMs + 10) {
         v.currentTime = next / 1000
       }
-    }, 100)
-    return () => clearInterval(interval)
+      setCurrentTime(v.currentTime)
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
   }, [isPlaying, editor.edl])
 
   // Keyboard shortcuts
@@ -924,7 +928,25 @@ export default function Editor() {
               </div>
               <div className={styles.trackContent}>
                 <div className={`${styles.trackClip} ${clipStyle}`} style={{ left: 0, right: '3%' }}>
-                  {isAudio ? (
+                  {isAudio && transcript && durationSec > 0 ? (
+                    <div className={styles.trackWords}>
+                      {transcript.words.map((word, wi) => {
+                        const left = (word.start / durationSec) * 100
+                        const width = Math.max(0.2, ((word.end - word.start) / durationSec) * 100)
+                        const isCutWord = editor.isCut(word.start * 1000, word.end * 1000)
+                        return (
+                          <span
+                            key={wi}
+                            className={`${styles.trackWord} ${word.filler ? styles.trackWordFiller : ''} ${isCutWord ? styles.trackWordCut : ''}`}
+                            style={{ left: `${left}%`, width: `${width}%` }}
+                            title={word.word}
+                          >
+                            {width > 1 ? word.word : ''}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  ) : isAudio ? (
                     <div className={styles.waveBars}>
                       {Array.from({ length: 200 }, (_, i) => (
                         <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.4 }} />

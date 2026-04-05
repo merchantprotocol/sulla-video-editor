@@ -12,9 +12,48 @@ export interface Edl {
   cuts: EdlCut[]
 }
 
+// Padding added before/after each cut to compensate for whisper timestamp drift.
+// Whisper base.en timestamps can be off by 50-200ms; 80ms covers most drift
+// without eating into adjacent words.
+const CUT_PAD_BEFORE_MS = 80
+const CUT_PAD_AFTER_MS = 60
+
 interface UndoEntry {
   edl: Edl
   desc: string
+}
+
+/**
+ * Pad a cut range to compensate for whisper timestamp inaccuracy,
+ * then clamp to zero.
+ */
+function padCut(startMs: number, endMs: number): { start_ms: number; end_ms: number } {
+  return {
+    start_ms: Math.max(0, startMs - CUT_PAD_BEFORE_MS),
+    end_ms: endMs + CUT_PAD_AFTER_MS,
+  }
+}
+
+/**
+ * Merge overlapping/adjacent cuts so the skip logic doesn't have gaps.
+ * Sorted by start_ms ascending.
+ */
+function mergeCuts(cuts: EdlCut[]): EdlCut[] {
+  if (cuts.length <= 1) return cuts
+  const sorted = [...cuts].sort((a, b) => a.start_ms - b.start_ms)
+  const merged: EdlCut[] = [sorted[0]]
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1]
+    const cur = sorted[i]
+    if (cur.start_ms <= prev.end_ms) {
+      // Overlap or adjacent — extend
+      prev.end_ms = Math.max(prev.end_ms, cur.end_ms)
+      prev.reason = prev.reason.includes(cur.reason) ? prev.reason : `${prev.reason}+${cur.reason}`
+    } else {
+      merged.push({ ...cur })
+    }
+  }
+  return merged
 }
 
 export function useEditor(initialEdl?: Edl) {
@@ -57,15 +96,13 @@ export function useEditor(initialEdl?: Edl) {
     return edl.cuts.some(c => c.start_ms <= startMs && c.end_ms >= endMs)
   }
 
-  // Add a cut
+  // Add a cut with padding for timestamp accuracy
   function addCut(startMs: number, endMs: number, reason: string) {
     // Don't add duplicate cuts
     if (isCut(startMs, endMs)) return
-    const newEdl = {
-      ...edl,
-      cuts: [...edl.cuts, { type: 'remove' as const, start_ms: startMs, end_ms: endMs, reason }],
-    }
-    pushUndo(reason, newEdl)
+    const padded = padCut(startMs, endMs)
+    const newCuts = mergeCuts([...edl.cuts, { type: 'remove' as const, ...padded, reason }])
+    pushUndo(reason, { ...edl, cuts: newCuts })
   }
 
   // Remove cuts in a range (restore)
@@ -77,44 +114,40 @@ export function useEditor(initialEdl?: Edl) {
     pushUndo('Restore cut region', newEdl)
   }
 
-  // Bulk: remove all fillers
+  // Bulk: remove all fillers with padding for timestamp accuracy
   function removeAllFillers(words: { start: number; end: number; filler?: boolean }[]) {
     const fillerCuts: EdlCut[] = words
       .filter(w => w.filler && !isCut(w.start * 1000, w.end * 1000))
-      .map(w => ({
-        type: 'remove' as const,
-        start_ms: Math.round(w.start * 1000),
-        end_ms: Math.round(w.end * 1000),
-        reason: 'filler',
-      }))
+      .map(w => {
+        const padded = padCut(Math.round(w.start * 1000), Math.round(w.end * 1000))
+        return { type: 'remove' as const, ...padded, reason: 'filler' }
+      })
 
     if (fillerCuts.length === 0) return 0
 
-    const newEdl = { ...edl, cuts: [...edl.cuts, ...fillerCuts] }
-    pushUndo(`Remove ${fillerCuts.length} fillers`, newEdl)
+    const newCuts = mergeCuts([...edl.cuts, ...fillerCuts])
+    pushUndo(`Remove ${fillerCuts.length} fillers`, { ...edl, cuts: newCuts })
     return fillerCuts.length
   }
 
-  // Bulk: trim all silence
+  // Bulk: trim all silence with padding
   function trimAllSilence(silences: { start: number; end: number; duration: number }[], thresholdMs = 1500) {
     const silenceCuts: EdlCut[] = silences
       .filter(s => s.duration * 1000 >= thresholdMs && !isCut(s.start * 1000, s.end * 1000))
-      .map(s => ({
-        type: 'remove' as const,
-        start_ms: Math.round(s.start * 1000),
-        end_ms: Math.round(s.end * 1000),
-        reason: `silence:${s.duration.toFixed(1)}s`,
-      }))
+      .map(s => {
+        const padded = padCut(Math.round(s.start * 1000), Math.round(s.end * 1000))
+        return { type: 'remove' as const, ...padded, reason: `silence:${s.duration.toFixed(1)}s` }
+      })
 
     if (silenceCuts.length === 0) return { count: 0, savedMs: 0 }
 
     const savedMs = silenceCuts.reduce((sum, c) => sum + (c.end_ms - c.start_ms), 0)
-    const newEdl = { ...edl, cuts: [...edl.cuts, ...silenceCuts] }
-    pushUndo(`Trim ${silenceCuts.length} pauses`, newEdl)
+    const newCuts = mergeCuts([...edl.cuts, ...silenceCuts])
+    pushUndo(`Trim ${silenceCuts.length} pauses`, { ...edl, cuts: newCuts })
     return { count: silenceCuts.length, savedMs }
   }
 
-  // Cut selected word range
+  // Cut selected word range (addCut already applies padding)
   function cutWords(words: { start: number; end: number }[]) {
     if (words.length === 0) return
     const startMs = Math.round(words[0].start * 1000)
