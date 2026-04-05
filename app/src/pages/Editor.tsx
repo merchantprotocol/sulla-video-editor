@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useProject } from '../hooks/useProjects'
 import { useEditor } from '../hooks/useEditor'
+import ExportPanel from '../components/ExportPanel'
 import styles from './Editor.module.css'
 
 interface Word { word: string; start: number; end: number; confidence: number; speaker: string; filler?: boolean }
@@ -10,13 +11,14 @@ interface Transcript { speakers: { id: string; name: string; color: string }[]; 
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>()
-  const { project, files, loading, transcribe, getTranscript, saveEdl, getEdl } = useProject(id!)
+  const { project, files, loading, transcribe, getTranscript, saveEdl, getEdl, renderVideo } = useProject(id!)
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -213,7 +215,7 @@ export default function Editor() {
 
         {saving && <span className={styles.savingLabel}>Saving...</span>}
 
-        <button className={styles.exportBtn}>
+        <button className={styles.exportBtn} onClick={() => setExportOpen(true)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export
         </button>
@@ -420,6 +422,14 @@ export default function Editor() {
               </>
             )}
           </div>
+
+          {/* Export panel overlay */}
+          <ExportPanel
+            open={exportOpen}
+            onClose={() => setExportOpen(false)}
+            onExport={renderVideo}
+            projectName={project.name}
+          />
         </div>
       </div>
 

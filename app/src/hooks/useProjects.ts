@@ -93,5 +93,17 @@ export function useProject(id: string) {
     return api.put(`/projects/${id}/edl`, edl)
   }
 
-  return { project, files, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl }
+  async function renderVideo(options: { format?: string; resolution?: string; quality?: string } = {}) {
+    return api.post(`/projects/${id}/render`, options)
+  }
+
+  async function renderClip(options: { start_ms: number; end_ms: number; format?: string; resolution?: string }) {
+    return api.post(`/projects/${id}/clips`, options)
+  }
+
+  async function getExports() {
+    return api.get(`/projects/${id}/exports`)
+  }
+
+  return { project, files, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, renderVideo, renderClip, getExports }
 }
