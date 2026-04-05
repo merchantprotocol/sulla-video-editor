@@ -121,8 +121,8 @@
 
 .word { display: inline; cursor: text; border-radius: 2px; transition: color 0.15s, opacity 0.15s; }
 .word:hover { background: rgba(0,0,0,0.03); }
-.played { color: var(--text-muted); }
-.current { background: var(--accent-soft); color: var(--accent); font-weight: 500; padding: 1px 2px; border-radius: 3px; }
+.playhead { display: inline-block; width: 2px; height: 1.1em; background: var(--accent); vertical-align: text-bottom; margin-right: 1px; border-radius: 1px; animation: blink 1s step-end infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .filler { color: var(--red); text-decoration: underline; text-decoration-color: var(--red); text-decoration-style: wavy; text-underline-offset: 3px; opacity: 0.7; cursor: pointer; }
 .cut { text-decoration: line-through; color: var(--text-dim); opacity: 0.3; }
 .cut:hover { opacity: 0.5; text-decoration-color: var(--green); }
@@ -357,6 +357,8 @@
 .ctxShortcut { margin-left: auto; font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
 .ctxItem svg { width: 14px; height: 14px; flex-shrink: 0; }
 .ctxDivider { height: 1px; background: var(--border); margin: 4px 0; }
+.ctxHeader { padding: 6px 12px 2px; font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.trackCtxMenu { min-width: 220px; }
 
 /* ═══ UNDO TOAST ═══ */
 .undoToast { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 16px; background: var(--text-primary); color: white; font-size: 12px; font-weight: 500; border-radius: 8px; z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.15); opacity: 0; transition: all 0.3s; pointer-events: none; }

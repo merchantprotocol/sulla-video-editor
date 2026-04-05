@@ -29,15 +29,27 @@ const ProjectService = {
     const hasSuggestions = existsSync(projectPath(project.id, 'data', 'suggestions.json'));
     const hasTracks = existsSync(projectPath(project.id, 'data', 'tracks.json'));
 
-    // Load tracks if available
+    // Load tracks — auto-generate from media if missing
     let tracks = [];
     if (hasTracks) {
       try {
         tracks = JSON.parse(await fs.readFile(projectPath(project.id, 'data', 'tracks.json'), 'utf-8'));
       } catch {}
+    } else if (project.media_path && existsSync(project.media_path)) {
+      // Media exists but tracks.json doesn't — extract now
+      try {
+        log.info('Auto-generating tracks from media', { projectId });
+        const metadata = await MediaService.extractMetadata(project.media_path);
+        tracks = metadata.tracks || [];
+        await fs.mkdir(projectPath(project.id, 'data'), { recursive: true });
+        await fs.writeFile(projectPath(project.id, 'data', 'tracks.json'), JSON.stringify(tracks, null, 2));
+        log.info('Tracks generated', { projectId, count: tracks.length });
+      } catch (err) {
+        log.warn('Failed to auto-generate tracks', { projectId, error: err.message });
+      }
     }
 
-    return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks }, tracks };
+    return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks: hasTracks || tracks.length > 0 }, tracks };
   },
 
   async create(userId, { name, ruleTemplate }) {

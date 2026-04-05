@@ -39,6 +39,7 @@ export default function Editor() {
   const [normalizeApplied, setNormalizeApplied] = useState(false)
   const [speakerMenuOpen, setSpeakerMenuOpen] = useState<number | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
 
   const cmdInputRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -124,6 +125,9 @@ export default function Editor() {
       }
       if (!target.closest(`.${styles.ctxMenu}`)) {
         setCtxMenu(null)
+      }
+      if (!target.closest(`.${styles.trackCtxMenu}`)) {
+        setTrackCtxMenu(null)
       }
     }
     document.addEventListener('click', handleClick)
@@ -294,6 +298,41 @@ export default function Editor() {
         navigator.clipboard.writeText(sel.toString()).catch(() => {})
         toast('Copied to clipboard')
       }
+    } else {
+      toast(action + ': coming soon')
+    }
+  }
+
+  function handleTrackContextMenu(e: React.MouseEvent, trackId: string, trackType: string, trackName: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    setTrackCtxMenu({ x: e.clientX, y: e.clientY, trackId, trackType, trackName })
+    setCtxMenu(null)
+  }
+
+  function trackCtxAction(action: string) {
+    if (!trackCtxMenu) return
+    const { trackId, trackType, trackName } = trackCtxMenu
+    setTrackCtxMenu(null)
+
+    if (action === 'mute') {
+      toggleMute(trackId)
+    } else if (action === 'solo') {
+      toggleSolo(trackId)
+    } else if (action === 'rename') {
+      toast(`Rename ${trackName}: coming soon`)
+    } else if (action === 'duplicate') {
+      toast(`Duplicate ${trackName}: coming soon`)
+    } else if (action === 'delete') {
+      toast(`Delete ${trackName}: coming soon`)
+    } else if (action === 'color') {
+      toast(`Change color: coming soon`)
+    } else if (action === 'detachAudio') {
+      toast('Detach audio: coming soon')
+    } else if (action === 'addEffect') {
+      toast('Add effect: coming soon')
+    } else if (action === 'splitAtPlayhead') {
+      toast('Split at playhead: coming soon')
     } else {
       toast(action + ': coming soon')
     }
@@ -596,8 +635,10 @@ export default function Editor() {
                           <span
                             key={`w${item.idx}`}
                             data-word-idx={item.idx}
-                            className={`${styles.word} ${word.filler ? styles.filler : ''} ${isCurrent ? styles.current : ''} ${cut ? styles.cut : ''}`}
+                            className={`${styles.word} ${word.filler ? styles.filler : ''} ${cut ? styles.cut : ''}`}
                             onClick={() => {
+                              const sel = window.getSelection()
+                              if (sel && !sel.isCollapsed) return
                               if (cut) {
                                 editor.removeCutsInRange(word.start * 1000, word.end * 1000)
                               } else {
@@ -605,6 +646,7 @@ export default function Editor() {
                               }
                             }}
                           >
+                            {isCurrent && <span className={styles.playhead} />}
                             {word.word}{' '}
                           </span>
                         )
@@ -864,6 +906,7 @@ export default function Editor() {
                   key={trackId}
                   className={`${styles.trackRow} ${selectedTrack === trackId ? styles.trackRowSelected : ''} ${isTrackMuted(trackId) ? styles.trackRowMuted : ''}`}
                   onClick={() => setSelectedTrack(trackId)}
+                  onContextMenu={(e) => handleTrackContextMenu(e, trackId, track.type, name)}
                 >
               <div className={styles.trackMeta}>
                 <div className={styles.trackColor} style={{ background: color }} />
@@ -937,6 +980,55 @@ export default function Editor() {
           <button className={styles.ctxItem} onClick={() => ctxAction('addBroll')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             Insert B-Roll Here
+          </button>
+        </div>
+      )}
+
+      {/* ═══ TRACK CONTEXT MENU ═══ */}
+      {trackCtxMenu && (
+        <div className={`${styles.ctxMenu} ${styles.ctxMenuOpen} ${styles.trackCtxMenu}`} style={{ left: trackCtxMenu.x, top: trackCtxMenu.y }}>
+          <div className={styles.ctxHeader}>{trackCtxMenu.trackName}</div>
+          <div className={styles.ctxDivider} />
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('mute')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+            {mutedTracks.has(trackCtxMenu.trackId) ? 'Unmute' : 'Mute'} <span className={styles.ctxShortcut}>M</span>
+          </button>
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('solo')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            {soloTrack === trackCtxMenu.trackId ? 'Unsolo' : 'Solo'} <span className={styles.ctxShortcut}>S</span>
+          </button>
+          <div className={styles.ctxDivider} />
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('splitAtPlayhead')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg>
+            Split at Playhead <span className={styles.ctxShortcut}>{'\u2318'}B</span>
+          </button>
+          {trackCtxMenu.trackType === 'video' && (
+            <button className={styles.ctxItem} onClick={() => trackCtxAction('detachAudio')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 3l-8 8H3v4h5l8 8V3z"/><path d="M23 3L1 21"/></svg>
+              Detach Audio
+            </button>
+          )}
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('addEffect')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Add Effect
+          </button>
+          <div className={styles.ctxDivider} />
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('rename')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Rename Track
+          </button>
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('duplicate')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Duplicate Track
+          </button>
+          <button className={styles.ctxItem} onClick={() => trackCtxAction('color')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.04-.23-.29-.38-.63-.38-1.01 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.17-4.49-9-10-9z"/></svg>
+            Change Color
+          </button>
+          <div className={styles.ctxDivider} />
+          <button className={`${styles.ctxItem} ${styles.ctxItemDanger}`} onClick={() => trackCtxAction('delete')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete Track <span className={styles.ctxShortcut}>{'\u232B'}</span>
           </button>
         </div>
       )}
