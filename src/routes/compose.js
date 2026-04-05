@@ -12,4 +12,7 @@ router.post('/projects/:id/compose', ComposeController.compose);
 // Quick compose — creates project + renders in one call
 router.post('/compose/quick', ComposeController.quickCompose);
 
+// React composition — build + capture + encode a React project as video
+router.post('/compose/react', ComposeController.renderReact);
+
 module.exports = router;
