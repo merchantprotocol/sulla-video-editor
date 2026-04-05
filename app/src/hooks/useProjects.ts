@@ -2,11 +2,29 @@ import { useState, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
 import { chunkedUpload } from '../lib/chunkedUpload'
 
+export interface TemplateRules {
+  removeFillers?: boolean
+  trimSilence?: { enabled: boolean; thresholdMs: number }
+  studioSound?: boolean
+  normalize?: { enabled: boolean; targetLufs: number }
+  autoCaptions?: boolean
+  autoClips?: boolean
+}
+
+export interface ProjectTemplateConfig {
+  theme?: Record<string, any>
+  scenes?: Record<string, any>[]
+  rules?: TemplateRules
+  export?: { defaultFormat?: string; defaultResolution?: string; defaultCodec?: string }
+}
+
 export interface Project {
   id: string
   name: string
   status: 'draft' | 'editing' | 'exported'
   rule_template: string | null
+  template_id: string | null
+  template_config: ProjectTemplateConfig | null
   duration_ms: number | null
   resolution: string | null
   file_size: number | null

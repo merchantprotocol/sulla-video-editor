@@ -34,7 +34,8 @@
 .selected { border-color: var(--accent); background: var(--accent-soft); }
 .ruleIcon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; background: var(--bg-elevated); }
 .ruleInfo { flex: 1; }
-.ruleName { font-size: 12px; font-weight: 600; }
+.ruleName { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.systemBadge { font-size: 8px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--border); border-radius: 3px; }
 .ruleDesc { font-size: 10px; color: var(--text-muted); }
 .ruleCheck { width: 18px; height: 18px; border: 1.5px solid var(--border-visible); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .selected .ruleCheck { background: var(--accent); border-color: var(--accent); color: white; }

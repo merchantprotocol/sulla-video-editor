@@ -271,6 +271,16 @@ const ProjectService = {
     return JSON.parse(await fs.readFile(transcriptPath, 'utf-8'));
   },
 
+  async saveTranscript(projectId, userId, transcriptData) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+
+    const transcriptPath = projectPath(projectId, 'data', 'transcript.json');
+    await fs.writeFile(transcriptPath, JSON.stringify(transcriptData, null, 2));
+    await ProjectRepository.update(projectId, {});
+    log.info('Transcript saved', { projectId });
+  },
+
   async getEdl(projectId, userId) {
     const project = await ProjectRepository.findByIdAndUser(projectId, userId);
     if (!project) throw new NotFoundError('Project not found');

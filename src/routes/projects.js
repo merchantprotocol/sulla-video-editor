@@ -16,6 +16,7 @@ router.delete('/:id', ProjectController.delete);
 router.post('/:id/import', ProjectController.importMedia);
 router.post('/:id/transcribe', ProjectController.transcribe);
 router.get('/:id/transcript', ProjectController.getTranscript);
+router.put('/:id/transcript', ProjectController.saveTranscript);
 router.get('/:id/edl', ProjectController.getEdl);
 router.put('/:id/edl', ProjectController.saveEdl);
 router.get('/:id/suggestions', ProjectController.getSuggestions);

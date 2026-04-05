@@ -221,6 +221,31 @@ export default function Editor() {
       await transcribe()
       const t = await getTranscript()
       setTranscript(t)
+
+      // Auto-apply template rules if the project has a template config
+      const rules = project.template_config?.rules
+      if (rules && t) {
+        let applied: string[] = []
+        if (rules.removeFillers) {
+          const count = editor.removeAllFillers(t.words)
+          if (count > 0) applied.push(`${count} fillers removed`)
+        }
+        if (rules.trimSilence?.enabled) {
+          const { count } = editor.trimAllSilence(t.silences, rules.trimSilence.thresholdMs)
+          if (count > 0) applied.push(`${count} pauses trimmed`)
+        }
+        if (rules.studioSound) {
+          setStudioSoundApplied(true)
+          applied.push('Studio Sound')
+        }
+        if (rules.normalize?.enabled) {
+          setNormalizeApplied(true)
+          applied.push(`Normalized to ${rules.normalize.targetLufs} LUFS`)
+        }
+        if (applied.length > 0) {
+          toast(`Template applied: ${applied.join(', ')}`)
+        }
+      }
     } catch (err: any) {
       alert('Transcription failed: ' + err.message)
     } finally {
