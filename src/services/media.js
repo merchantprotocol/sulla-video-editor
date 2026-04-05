@@ -8,8 +8,14 @@ const exec = promisify(execFile);
 function parseFraction(str) {
   if (!str) return 30;
   const parts = str.split('/');
-  if (parts.length === 2) return parseInt(parts[0]) / parseInt(parts[1]);
-  return parseFloat(str) || 30;
+  if (parts.length === 2) {
+    const num = parseInt(parts[0]);
+    const den = parseInt(parts[1]);
+    if (isNaN(num) || isNaN(den) || den === 0) return 30;
+    return num / den;
+  }
+  const val = parseFloat(str);
+  return isNaN(val) ? 30 : val;
 }
 
 /**
@@ -77,4 +83,4 @@ async function generateThumbnails(inputPath, outputDir) {
   ]);
 }
 
-module.exports = { extractMetadata, extractAudio, generateThumbnails };
+module.exports = { extractMetadata, extractAudio, generateThumbnails, parseFraction };

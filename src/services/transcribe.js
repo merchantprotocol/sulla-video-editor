@@ -124,4 +124,4 @@ function transformWhisperOutput(whisperOutput) {
   };
 }
 
-module.exports = { transcribe };
+module.exports = { transcribe, transformWhisperOutput };
