@@ -43,10 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.get('/auth/me')
       .then(data => {
         setUser(data.user)
-        setOrgs(data.orgs)
+        setOrgs(data.orgs || [])
         const savedOrgId = localStorage.getItem('sulla_org')
-        const org = data.orgs.find((o: Org) => o.id === savedOrgId) || data.orgs[0]
-        setCurrentOrg(org)
+        const org = (data.orgs || []).find((o: Org) => o.id === savedOrgId) || data.orgs?.[0]
+        setCurrentOrg(org || null)
       })
       .catch(() => {
         localStorage.removeItem('sulla_token')
@@ -58,16 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await api.post('/auth/login', { email, password })
     localStorage.setItem('sulla_token', data.token)
     setUser(data.user)
-    setOrgs(data.orgs)
-    setCurrentOrg(data.orgs[0])
+    setOrgs(data.orgs || [])
+    setCurrentOrg(data.orgs?.[0] || null)
   }
 
   async function register(name: string, email: string, password: string, orgName: string) {
     const data = await api.post('/auth/register', { name, email, password, org_name: orgName })
     localStorage.setItem('sulla_token', data.token)
     setUser(data.user)
-    setOrgs(data.orgs)
-    setCurrentOrg(data.orgs[0])
+    setOrgs(data.orgs || [])
+    setCurrentOrg(data.orgs?.[0] || null)
   }
 
   function logout() {

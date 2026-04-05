@@ -9,5 +9,50 @@ services:
       - "./:/var/www/html:rw"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
       - WAZUH_MANAGER=${WAZUH_MANAGER:-}
       - WAZUH_AGENT_NAME=${WAZUH_AGENT_NAME:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=sulla_video
+      - POSTGRES_USER=sulla
+      - POSTGRES_PASSWORD=sulla
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sulla -d sulla_video"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - "./migrations:/migrations:ro"
+    environment:
+      - PGHOST=db
+      - PGUSER=sulla
+      - PGPASSWORD=sulla
+      - PGDATABASE=sulla_video
+    command: >
+      sh -c '
+        for f in /migrations/*.sql; do
+          echo "Running migration: $$f"
+          psql -f "$$f"
+        done
+        echo "Migrations complete"
+      '
+
+volumes:
+  pgdata:
