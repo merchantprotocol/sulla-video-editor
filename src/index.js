@@ -29,6 +29,7 @@ app.get('/api/onboarded', AuthController.onboarded);
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projects', require('./routes/projects'));
+app.use('/api/projects', require('./routes/render'));
 
 // ─── Static files + SPA fallback ────────────────────────────
 
