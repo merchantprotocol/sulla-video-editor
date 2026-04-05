@@ -345,6 +345,24 @@ const ProjectService = {
 
     return filePath;
   },
+
+  async getOverlays(projectId, userId) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+
+    const overlaysPath = projectPath(projectId, 'data', 'overlays.json');
+    if (!existsSync(overlaysPath)) return { overlays: [] };
+
+    return JSON.parse(await fs.readFile(overlaysPath, 'utf-8'));
+  },
+
+  async saveOverlays(projectId, userId, overlays) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+
+    const overlaysPath = projectPath(projectId, 'data', 'overlays.json');
+    await fs.writeFile(overlaysPath, JSON.stringify({ overlays }, null, 2));
+  },
 };
 
 module.exports = ProjectService;

@@ -138,6 +138,20 @@ const ProjectController = {
       res.sendFile(filePath);
     } catch (err) { next(err); }
   },
+
+  async getOverlays(req, res, next) {
+    try {
+      const overlays = await ProjectService.getOverlays(req.params.id, req.userId);
+      res.json(overlays);
+    } catch (err) { next(err); }
+  },
+
+  async saveOverlays(req, res, next) {
+    try {
+      await ProjectService.saveOverlays(req.params.id, req.userId, req.body.overlays || []);
+      res.json({ saved: true });
+    } catch (err) { next(err); }
+  },
 };
 
 module.exports = ProjectController;

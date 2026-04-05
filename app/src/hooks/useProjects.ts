@@ -160,6 +160,14 @@ export function useProject(id: string) {
     return api.put(`/projects/${id}/edl`, edl)
   }
 
+  async function getOverlays() {
+    return api.get(`/projects/${id}/overlays`).catch(() => ({ overlays: [] }))
+  }
+
+  async function saveOverlays(overlays: any[]) {
+    return api.put(`/projects/${id}/overlays`, { overlays })
+  }
+
   async function renderVideo(options: { format?: string; resolution?: string; quality?: string } = {}) {
     return api.post(`/projects/${id}/render`, options)
   }
@@ -172,5 +180,5 @@ export function useProject(id: string) {
     return api.get(`/projects/${id}/exports`)
   }
 
-  return { project, files, tracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, renderVideo, renderClip, getExports }
+  return { project, files, tracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, getOverlays, saveOverlays, renderVideo, renderClip, getExports }
 }

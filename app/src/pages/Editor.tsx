@@ -17,7 +17,7 @@ interface Transcript { speakers: { id: string; name: string; color: string }[]; 
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>()
-  const { project, files, tracks, loading, transcribe, getTranscript, saveEdl, getEdl, renderVideo } = useProject(id!)
+  const { project, files, tracks, loading, transcribe, getTranscript, saveEdl, getEdl, getOverlays, saveOverlays, renderVideo } = useProject(id!)
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -64,7 +64,7 @@ export default function Editor() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const appRef = useRef<HTMLDivElement>(null)
 
-  // Load transcript + EDL
+  // Load transcript + EDL + overlays
   useEffect(() => {
     if (files.hasTranscript) {
       getTranscript().then(setTranscript).catch(() => {})
@@ -72,6 +72,7 @@ export default function Editor() {
     if (files.hasEdl) {
       getEdl().then(edl => editor.setEdl(edl)).catch(() => {})
     }
+    getOverlays().then(data => { if (data.overlays?.length) setOverlays(data.overlays) }).catch(() => {})
   }, [files.hasTranscript, files.hasEdl])
 
   // Auto-save EDL on changes (debounced)
@@ -84,6 +85,16 @@ export default function Editor() {
       setSaving(false)
     }, 1000)
   }, [editor.undoCount])
+
+  // Auto-save overlays on changes (debounced)
+  const overlaySaveTimer = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => {
+    if (overlays.length === 0) return
+    clearTimeout(overlaySaveTimer.current)
+    overlaySaveTimer.current = setTimeout(() => {
+      saveOverlays(overlays).catch(() => {})
+    }, 1000)
+  }, [overlays])
 
   // EDL-aware playback: skip cut regions using rAF for frame-accurate seeking
   useEffect(() => {
@@ -831,7 +842,7 @@ export default function Editor() {
         />
 
         <div className={styles.videoSection}>
-          <div className={styles.videoFrame}>
+          <div className={styles.videoFrame} ref={videoFrameRef} onClick={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'VIDEO') setSelectedOverlayId(null) }}>
             {project.media_path ? (
               <video
                 ref={videoRef}
@@ -847,6 +858,13 @@ export default function Editor() {
                 Video Preview
               </div>
             )}
+            <VideoOverlays
+              overlays={overlays}
+              selectedId={selectedOverlayId}
+              containerRef={videoFrameRef}
+              onSelect={setSelectedOverlayId}
+              onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
+            />
           </div>
           {project.media_path && (
             <div className={styles.videoControls}>
@@ -869,6 +887,18 @@ export default function Editor() {
 
         {/* Sulla Sections */}
         <div className={styles.sullaSection}>
+          {/* Overlay controls */}
+          <div className={styles.panelSection}>
+            <OverlayControls
+              overlays={overlays}
+              selectedId={selectedOverlayId}
+              onSelect={setSelectedOverlayId}
+              onAdd={(item) => setOverlays(prev => [...prev, item])}
+              onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
+              onRemove={(id) => { setOverlays(prev => prev.filter(o => o.id !== id)); if (selectedOverlayId === id) setSelectedOverlayId(null) }}
+            />
+          </div>
+
           {/* Suggestions section */}
           {transcript && (
             <div className={`${styles.panelSection} ${suggestionsCollapsed ? styles.panelSectionCollapsed : ''}`}>
