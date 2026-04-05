@@ -7,6 +7,8 @@ import Welcome from './pages/Welcome'
 import NewProject from './pages/NewProject'
 import Editor from './pages/Editor'
 import Templates from './pages/Templates'
+import Profile from './pages/Profile'
+import Settings from './pages/Settings'
 
 function Layout() {
   return (
@@ -55,6 +57,8 @@ function AppShell() {
         <Route index element={<Welcome />} />
         <Route path="new" element={<NewProject />} />
         <Route path="templates" element={<Templates />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
   )

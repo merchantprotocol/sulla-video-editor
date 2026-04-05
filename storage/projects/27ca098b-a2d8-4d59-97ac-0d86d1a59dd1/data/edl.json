@@ -9,6 +9,12 @@
     },
     {
       "type": "remove",
+      "start_ms": 21400,
+      "end_ms": 22200,
+      "reason": "split"
+    },
+    {
+      "type": "remove",
       "start_ms": 23260,
       "end_ms": 24000,
       "reason": "filler"
@@ -27,6 +33,12 @@
     },
     {
       "type": "remove",
+      "start_ms": 34540,
+      "end_ms": 35460,
+      "reason": "split"
+    },
+    {
+      "type": "remove",
       "start_ms": 39720,
       "end_ms": 42000,
       "reason": "cut:5 words"
@@ -35,6 +47,12 @@
       "type": "remove",
       "start_ms": 43440,
       "end_ms": 43880,
+      "reason": "filler"
+    },
+    {
+      "type": "remove",
+      "start_ms": 45050,
+      "end_ms": 45360,
       "reason": "filler"
     },
     {
@@ -53,12 +71,6 @@
       "type": "remove",
       "start_ms": 76170,
       "end_ms": 76360,
-      "reason": "filler"
-    },
-    {
-      "type": "remove",
-      "start_ms": 45050,
-      "end_ms": 45360,
       "reason": "filler"
     }
   ]

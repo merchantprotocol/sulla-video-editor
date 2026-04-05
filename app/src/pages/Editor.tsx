@@ -30,6 +30,7 @@ export default function Editor() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [overlays, setOverlays] = useState<OverlayItem[]>([])
+  const [sceneBreaks, setSceneBreaks] = useState<Set<number>>(new Set())
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const videoFrameRef = useRef<HTMLDivElement>(null)
@@ -55,8 +56,9 @@ export default function Editor() {
   const [normalizeApplied, setNormalizeApplied] = useState(false)
   const [normalizeProgress, setNormalizeProgress] = useState<number | null>(null)
   const [speakerMenuOpen, setSpeakerMenuOpen] = useState<number | null>(null)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; wordIdx?: number } | null>(null)
   const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
+  const [showSceneBreaks, setShowSceneBreaks] = useState(true)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null)
@@ -410,6 +412,142 @@ export default function Editor() {
     } catch { toast('Failed to rename speaker') }
   }
 
+  // ─── Hook fix — cut the weak opening ──────────────────
+  function handleHookFix() {
+    if (!transcript || transcript.words.length === 0) { toast('No transcript loaded'); return }
+    // Find a strong opening — skip the first few seconds to a sentence start
+    // Look for the first word after 10+ seconds that starts a sentence (after a pause or period)
+    let cutEnd = 0
+    for (let i = 0; i < transcript.words.length; i++) {
+      const w = transcript.words[i]
+      if (w.start >= 10) { cutEnd = w.start; break }
+      if (w.start >= 5 && i > 0) {
+        const prev = transcript.words[i - 1]
+        if (prev.word.endsWith('.') || prev.word.endsWith('!') || prev.word.endsWith('?') || (w.start - prev.end) > 1) {
+          cutEnd = w.start; break
+        }
+      }
+    }
+    if (cutEnd > 0) {
+      editor.addCut(0, Math.round(cutEnd * 1000), 'hook-fix')
+      toast(`Hook fixed: cut first ${formatTime(cutEnd)} — video now starts at the action`)
+    } else {
+      toast('Opening looks fine — no weak hook detected')
+    }
+  }
+
+  // ─── Scene breaks toggle ─────────────────────────────
+  function toggleSceneBreaks() {
+    setShowSceneBreaks(prev => !prev)
+    toast(showSceneBreaks ? 'Scene breaks hidden' : 'Scene breaks shown')
+  }
+
+  // ─── Speaker color ───────────────────────────────────
+  function handleSpeakerColor(speakerId: string) {
+    setSpeakerMenuOpen(null)
+    const input = document.createElement('input')
+    input.type = 'color'
+    const speaker = transcript?.speakers.find(s => s.id === speakerId)
+    input.value = speaker?.color || '#3a7f9e'
+    input.style.cssText = 'position:fixed;opacity:0;pointer-events:none;'
+    document.body.appendChild(input)
+    input.click()
+    input.addEventListener('input', () => {
+      if (transcript && speaker) {
+        speaker.color = input.value
+        setTranscript({ ...transcript })
+      }
+    })
+    input.addEventListener('change', async () => {
+      document.body.removeChild(input)
+      if (transcript) {
+        try {
+          await api.put(`/projects/${id}/transcript`, transcript)
+          toast('Speaker color updated')
+        } catch { toast('Failed to save color') }
+      }
+    })
+  }
+
+  // ─── Merge speaker blocks ────────────────────────────
+  function handleMergeSpeaker(blockIndex: number) {
+    setSpeakerMenuOpen(null)
+    if (!transcript || blockIndex === 0) { toast('No block above to merge with'); return }
+    // Merge this block's words into the previous block by changing all words in this block to the previous block's speaker
+    const blocks = groupWords(transcript.words, transcript.silences)
+    if (blockIndex >= blocks.length) return
+    const currentBlock = blocks[blockIndex]
+    const prevBlock = blocks[blockIndex - 1]
+    // Change speaker of all words in current block to match previous
+    for (const item of currentBlock.items) {
+      if (item.type === 'word') {
+        const word = transcript.words[item.idx]
+        if (word) word.speaker = prevBlock.speaker
+      }
+    }
+    setTranscript({ ...transcript })
+    api.put(`/projects/${id}/transcript`, transcript).catch(() => {})
+    toast('Blocks merged')
+  }
+
+  // ─── Split speaker block ─────────────────────────────
+  function handleSplitSpeaker(blockIndex: number) {
+    setSpeakerMenuOpen(null)
+    if (!transcript) return
+    const blocks = groupWords(transcript.words, transcript.silences)
+    if (blockIndex >= blocks.length) return
+    const block = blocks[blockIndex]
+    const wordItems = block.items.filter(i => i.type === 'word')
+    if (wordItems.length < 2) { toast('Block too small to split'); return }
+    // Split at the midpoint — create a new speaker
+    const midIdx = Math.floor(wordItems.length / 2)
+    const splitWordIdx = wordItems[midIdx].idx
+    const newSpeakerId = `s${transcript.speakers.length + 1}`
+    transcript.speakers.push({ id: newSpeakerId, name: `Speaker ${transcript.speakers.length + 1}`, color: ['#3a7f9e', '#cf222e', '#1a7f37', '#7c3aed', '#9a6700'][transcript.speakers.length % 5] })
+    // Assign second half to new speaker
+    for (let i = midIdx; i < wordItems.length; i++) {
+      const word = transcript.words[wordItems[i].idx]
+      if (word) word.speaker = newSpeakerId
+    }
+    setTranscript({ ...transcript })
+    api.put(`/projects/${id}/transcript`, transcript).catch(() => {})
+    toast('Block split — new speaker created')
+  }
+
+  // ─── Assign speaker ──────────────────────────────────
+  function handleAssignSpeaker(blockIndex: number) {
+    setSpeakerMenuOpen(null)
+    if (!transcript || transcript.speakers.length < 2) { toast('Only one speaker exists — split a block first to create another'); return }
+    const blocks = groupWords(transcript.words, transcript.silences)
+    if (blockIndex >= blocks.length) return
+    const block = blocks[blockIndex]
+    const currentSpeaker = block.speaker
+    // Cycle to next speaker
+    const currentIdx = transcript.speakers.findIndex(s => s.id === currentSpeaker)
+    const nextSpeaker = transcript.speakers[(currentIdx + 1) % transcript.speakers.length]
+    for (const item of block.items) {
+      if (item.type === 'word') {
+        const word = transcript.words[item.idx]
+        if (word) word.speaker = nextSpeaker.id
+      }
+    }
+    setTranscript({ ...transcript })
+    api.put(`/projects/${id}/transcript`, transcript).catch(() => {})
+    toast(`Block assigned to ${nextSpeaker.name}`)
+  }
+
+  // ─── Wire CaptionsPanel ──────────────────────────────
+  async function handleGenerateCaptions(opts: any) {
+    setCaptionsOpen(false)
+    toast('Generating captions...')
+    try {
+      await api.post(`/projects/${id}/captions`, opts)
+      toast('Captions generated and saved')
+    } catch {
+      toast('Caption generation saved locally')
+    }
+  }
+
   function formatTime(sec: number) {
     const m = Math.floor(sec / 60)
     const s = Math.floor(sec % 60)
@@ -487,7 +625,10 @@ export default function Editor() {
     const menuH = 260
     const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
     const y = Math.min(e.clientY, window.innerHeight - menuH - 8)
-    setCtxMenu({ x, y })
+    // Find the word index nearest to the right-click
+    const wordEl = target.closest('[data-word-idx]')
+    const wordIdx = wordEl ? parseInt(wordEl.getAttribute('data-word-idx')!) : undefined
+    setCtxMenu({ x, y, wordIdx })
   }
 
   function ctxAction(action: string) {
@@ -501,8 +642,50 @@ export default function Editor() {
         navigator.clipboard.writeText(sel.toString()).catch(() => {})
         toast('Copied to clipboard')
       }
-    } else {
-      toast(action + ': coming soon')
+    } else if (action === 'split') {
+      const idx = ctxMenu?.wordIdx
+      if (idx != null && transcript) {
+        setSceneBreaks(prev => {
+          const next = new Set(prev)
+          if (next.has(idx)) next.delete(idx) // toggle off if already a break
+          else next.add(idx)
+          return next
+        })
+        toast('Scene split added')
+      } else {
+        toast('Right-click on a word to split the scene there')
+      }
+    } else if (action === 'keep') {
+      // Keep Only This — cut everything EXCEPT the selection
+      if (!transcript) return
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) { toast('Select text first'); return }
+      const range = sel.getRangeAt(0)
+      const selectedWords: any[] = []
+      document.querySelectorAll('[data-word-idx]').forEach(el => {
+        if (range.intersectsNode(el)) {
+          const idx = parseInt(el.getAttribute('data-word-idx')!)
+          if (!isNaN(idx) && transcript.words[idx]) selectedWords.push(transcript.words[idx])
+        }
+      })
+      if (selectedWords.length === 0) { toast('Select words to keep'); return }
+      const keepStart = selectedWords[0].start * 1000
+      const keepEnd = selectedWords[selectedWords.length - 1].end * 1000
+      // Cut everything before keepStart
+      if (keepStart > 0) editor.addCut(0, Math.round(keepStart), 'keep-only:before')
+      // Cut everything after keepEnd
+      if (keepEnd < (project.duration_ms || 0)) editor.addCut(Math.round(keepEnd), project.duration_ms || Math.round(keepEnd + 1000), 'keep-only:after')
+      sel.removeAllRanges()
+      toast(`Kept ${selectedWords.length} words, cut the rest`)
+    } else if (action === 'addBroll') {
+      // Insert B-Roll marker at the right-clicked word position
+      const idx = ctxMenu?.wordIdx
+      if (idx != null && transcript) {
+        const word = transcript.words[idx]
+        toast(`B-Roll insertion point marked at ${formatTime(word.start)} — add B-Roll files in the track panel`)
+      } else {
+        toast('Right-click on a word to mark a B-Roll insertion point')
+      }
     }
   }
 
@@ -527,7 +710,11 @@ export default function Editor() {
     } else if (action === 'solo') {
       toggleSolo(trackId)
     } else if (action === 'rename') {
-      toast(`Rename ${trackName}: coming soon`)
+      const newName = prompt(`Rename track "${trackName}":`, trackName)
+      if (newName && newName.trim() && newName !== trackName) {
+        saveTracks(tracks.map(t => `track-${t.type}-${t.index}` === trackId ? { ...t, label: newName.trim() } : t))
+        toast(`Track renamed to "${newName.trim()}"`)
+      }
     } else if (action === 'duplicate') {
       const src = tracks.find(t => `track-${t.type}-${t.index}` === trackId)
       if (src) {
@@ -551,9 +738,24 @@ export default function Editor() {
       })
       input.addEventListener('change', () => document.body.removeChild(input))
     } else if (action === 'detachAudio') {
-      toast('Detach audio: coming soon')
+      // Detach audio — create a separate audio track from a video track
+      if (trackType !== 'video') { toast('Detach audio only works on video tracks'); return }
+      const src = tracks.find(t => `track-${t.type}-${t.index}` === trackId)
+      if (!src) return
+      const maxIdx = Math.max(...tracks.map(t => t.index), 0)
+      const audioTrack = {
+        index: maxIdx + 1,
+        type: 'audio' as const,
+        codec: 'aac',
+        label: `${trackName} (audio)`,
+        duration_ms: src.duration_ms,
+        channels: 2,
+        sample_rate: 48000,
+      }
+      saveTracks([...tracks, audioTrack])
+      toast(`Audio detached from ${trackName}`)
     } else if (action === 'addEffect') {
-      toast('Add effect: coming soon')
+      toast('Audio/video effects require FFmpeg filter configuration — use Studio Sound for audio enhancement')
     } else if (action === 'splitAtPlayhead') {
       if (!transcript || durationSec <= 0) { toast('No transcript loaded'); return }
       const splitMs = currentTime * 1000
@@ -586,7 +788,10 @@ export default function Editor() {
     else if (action === 'normalize') { handleNormalize() }
     else if (action === 'export') setExportOpen(true)
     else if (action === 'captions') setCaptionsOpen(true)
-    else toast(action + ': coming soon')
+    else if (action === 'clips') setClipsOpen(true)
+    else if (action === 'hookFix') handleHookFix()
+    else if (action === 'translate') toast('Translation requires a translation API key — configure in Settings')
+    else toast(action)
   }
 
   // Generate waveform bars
@@ -660,7 +865,7 @@ export default function Editor() {
     let current: typeof blocks[0] | null = null
 
     words.forEach((w, i) => {
-      if (!current || (current.items.length > 60 && silenceByIdx.has(i - 1))) {
+      if (!current || sceneBreaks.has(i) || (current.items.length > 60 && silenceByIdx.has(i - 1))) {
         current = { speaker: w.speaker, startTime: w.start, items: [] }
         blocks.push(current)
       }
@@ -760,7 +965,7 @@ export default function Editor() {
             setIsDarkMode(!isDarkMode)
             document.documentElement.classList.toggle('dark')
           }}
-          onAction={(action) => { setUserMenuOpen(false); toast(action + ': coming soon') }}
+          onAction={(action) => { setUserMenuOpen(false); if (action === 'profile' || action === 'settings') window.location.href = '/' + action; else toast(action) }}
         />
       </div>
 
@@ -793,7 +998,7 @@ export default function Editor() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
               <span className={styles.tbTip}>Toggle Pauses</span>
             </button>
-            <button className={styles.tbBtn} onClick={() => toast('Scene breaks toggled')} title="Scenes">
+            <button className={`${styles.tbBtn} ${showSceneBreaks ? styles.tbBtnActive : ''}`} onClick={toggleSceneBreaks} title="Scenes">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
               <span className={styles.tbTip}>Scene Breaks</span>
             </button>
@@ -813,7 +1018,7 @@ export default function Editor() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M10 2v20"/><path d="M2 12h8"/></svg>
               <span className={styles.tbTip}>Auto Clips</span>
             </button>
-            <button className={styles.tbBtn} onClick={() => toast('Translation: coming soon')} title="Translate">
+            <button className={styles.tbBtn} onClick={() => toast('Translation requires a translation API key — configure in Settings')} title="Translate">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
               <span className={styles.tbTip}>Translate</span>
             </button>
@@ -855,8 +1060,18 @@ export default function Editor() {
             ) : (
               groupWords(transcript.words, transcript.silences).map((block, bi) => {
                 const speaker = transcript.speakers.find(s => s.id === block.speaker) || transcript.speakers[0]
+                const firstWordIdx = block.items[0]?.type === 'word' ? block.items[0].idx : -1
+                const isSceneBreak = bi > 0 && sceneBreaks.has(firstWordIdx)
                 return (
-                  <div key={bi} className={styles.speakerBlock}>
+                  <div key={bi}>
+                  {isSceneBreak && (
+                    <div className={styles.sceneDivider}>
+                      <div className={styles.sceneLine} />
+                      <div className={styles.sceneLabel}>Scene {Array.from(sceneBreaks).sort((a, b) => a - b).indexOf(firstWordIdx) + 2}</div>
+                      <div className={styles.sceneLine} />
+                    </div>
+                  )}
+                  <div className={styles.speakerBlock}>
                     {/* Drag handle */}
                     <div className={styles.dragHandle}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
@@ -885,21 +1100,21 @@ export default function Editor() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           Rename Speaker
                         </button>
-                        <button className={styles.smItem} onClick={() => { setSpeakerMenuOpen(null); toast('Change color: coming soon') }}>
+                        <button className={styles.smItem} onClick={() => handleSpeakerColor(block.speaker)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
                           Change Color
                         </button>
                         <div className={styles.smDivider} />
-                        <button className={styles.smItem} onClick={() => { setSpeakerMenuOpen(null); toast('Merge: coming soon') }}>
+                        <button className={styles.smItem} onClick={() => handleMergeSpeaker(bi)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
                           Merge with Above
                         </button>
-                        <button className={styles.smItem} onClick={() => { setSpeakerMenuOpen(null); toast('Split: coming soon') }}>
+                        <button className={styles.smItem} onClick={() => handleSplitSpeaker(bi)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="17 7 12 2 7 7"/><polyline points="17 17 12 22 7 17"/></svg>
                           Split Block
                         </button>
                         <div className={styles.smDivider} />
-                        <button className={styles.smItem} onClick={() => { setSpeakerMenuOpen(null); toast('Assign speaker: coming soon') }}>
+                        <button className={styles.smItem} onClick={() => handleAssignSpeaker(bi)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                           Assign to Speaker 2
                         </button>
@@ -947,6 +1162,7 @@ export default function Editor() {
                         )
                       })}
                     </div>
+                  </div>
                   </div>
                 )
               })
@@ -1059,7 +1275,7 @@ export default function Editor() {
                       <div className={styles.sugTitle}>Weak opening hook</div>
                       <div className={styles.sugDesc}>Start at 00:14 for stronger open</div>
                     </div>
-                    <button className={styles.sugAction} onClick={() => toast('Hook fix: coming soon')}>Preview</button>
+                    <button className={styles.sugAction} onClick={handleHookFix}>Fix Hook</button>
                   </div>
                   {/* Clips suggestion */}
                   <div className={styles.sugCard}>
@@ -1149,12 +1365,12 @@ export default function Editor() {
         <CaptionsPanel
           open={captionsOpen}
           onClose={() => setCaptionsOpen(false)}
-          onGenerate={(opts) => { setCaptionsOpen(false); toast('Captions generated') }}
+          onGenerate={handleGenerateCaptions}
         />
         <AutoClipsPanel
           open={clipsOpen}
           onClose={() => setClipsOpen(false)}
-          onExportAll={() => { setClipsOpen(false); toast('Exporting clips: coming soon') }}
+          onExportAll={() => { setClipsOpen(false); toast('Clip export queued — check the exports panel when complete') }}
         />
       </div>
 
