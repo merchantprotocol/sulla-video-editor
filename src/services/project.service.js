@@ -51,7 +51,9 @@ const ProjectService = {
       }
     }
 
-    return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks: hasTracks || tracks.length > 0 }, tracks };
+    const hasWaveform = existsSync(projectPath(project.id, 'data', 'waveform.json'));
+
+    return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks: hasTracks || tracks.length > 0, hasWaveform }, tracks };
   },
 
   async create(userId, { name, ruleTemplate, templateId }) {
@@ -163,6 +165,19 @@ const ProjectService = {
 
     log.info('Generating thumbnails', { projectId });
     await MediaService.generateThumbnails(sourcePath, projectPath(projectId, 'media', 'thumbnails'));
+
+    // Extract waveform for audio track visualization
+    log.info('Extracting waveform', { projectId });
+    try {
+      const waveResult = await MediaService.extractWaveform(
+        projectPath(projectId, 'media', 'audio.wav'),
+        projectPath(projectId, 'data', 'waveform.json'),
+        100 // 100 samples/sec = 10ms resolution
+      );
+      log.info('Waveform extracted', { projectId, samples: waveResult.sample_count });
+    } catch (err) {
+      log.warn('Waveform extraction failed (non-fatal)', { projectId, error: err.message });
+    }
 
     // Update DB
     await ProjectRepository.update(projectId, {
@@ -308,6 +323,16 @@ const ProjectService = {
     if (!existsSync(sugPath)) return { suggestions: [] };
 
     return JSON.parse(await fs.readFile(sugPath, 'utf-8'));
+  },
+
+  async getWaveform(projectId, userId) {
+    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    if (!project) throw new NotFoundError('Project not found');
+
+    const waveformPath = projectPath(projectId, 'data', 'waveform.json');
+    if (!existsSync(waveformPath)) throw new NotFoundError('No waveform data — re-import media to generate');
+
+    return JSON.parse(await fs.readFile(waveformPath, 'utf-8'));
   },
 
   async getExports(projectId, userId) {

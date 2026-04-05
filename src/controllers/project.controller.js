@@ -111,6 +111,13 @@ const ProjectController = {
     } catch (err) { next(err); }
   },
 
+  async getWaveform(req, res, next) {
+    try {
+      const waveform = await ProjectService.getWaveform(req.params.id, req.userId);
+      res.json(waveform);
+    } catch (err) { next(err); }
+  },
+
   async getSuggestions(req, res, next) {
     try {
       const suggestions = await ProjectService.getSuggestions(req.params.id, req.userId);

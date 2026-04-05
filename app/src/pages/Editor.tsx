@@ -17,7 +17,7 @@ interface Transcript { speakers: { id: string; name: string; color: string }[]; 
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>()
-  const { project, files, tracks, setTracks, loading, transcribe, getTranscript, saveEdl, getEdl, getOverlays, saveOverlays, saveTracks, renderVideo } = useProject(id!)
+  const { project, files, tracks, setTracks, loading, transcribe, getTranscript, saveEdl, getEdl, getOverlays, saveOverlays, saveTracks, renderVideo, getWaveform } = useProject(id!)
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -59,6 +59,7 @@ export default function Editor() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; wordIdx?: number } | null>(null)
   const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
   const [showSceneBreaks, setShowSceneBreaks] = useState(true)
+  const [waveformData, setWaveformData] = useState<number[] | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null)
@@ -77,7 +78,10 @@ export default function Editor() {
       getEdl().then(edl => editor.setEdl(edl)).catch(() => {})
     }
     getOverlays().then(data => { if (data.overlays?.length) setOverlays(data.overlays) }).catch(() => {})
-  }, [files.hasTranscript, files.hasEdl])
+    if (files.hasWaveform) {
+      getWaveform().then(data => setWaveformData(data.amplitudes || null)).catch(() => {})
+    }
+  }, [files.hasTranscript, files.hasEdl, files.hasWaveform])
 
   // Auto-save EDL on changes (debounced)
   useEffect(() => {
@@ -1495,10 +1499,27 @@ export default function Editor() {
                         )
                       })}
                     </div>
+                  ) : isAudio && waveformData ? (
+                    <div className={styles.waveBars}>
+                      {(() => {
+                        // Downsample waveform to fit the track width (~300 bars)
+                        const targetBars = 300
+                        const step = Math.max(1, Math.floor(waveformData.length / targetBars))
+                        const bars: number[] = []
+                        for (let i = 0; i < waveformData.length; i += step) {
+                          const chunk = waveformData.slice(i, i + step)
+                          const max = Math.max(...chunk)
+                          bars.push(max)
+                        }
+                        return bars.map((amp, i) => (
+                          <div key={i} className={styles.wb} style={{ height: `${Math.max(2, amp * 100)}%`, background: color, opacity: 0.5 }} />
+                        ))
+                      })()}
+                    </div>
                   ) : isAudio ? (
                     <div className={styles.waveBars}>
                       {Array.from({ length: 200 }, (_, i) => (
-                        <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.4 }} />
+                        <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.3 }} />
                       ))}
                     </div>
                   ) : (

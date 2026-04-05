@@ -19,6 +19,7 @@ router.get('/:id/transcript', ProjectController.getTranscript);
 router.put('/:id/transcript', ProjectController.saveTranscript);
 router.get('/:id/edl', ProjectController.getEdl);
 router.put('/:id/edl', ProjectController.saveEdl);
+router.get('/:id/waveform', ProjectController.getWaveform);
 router.get('/:id/suggestions', ProjectController.getSuggestions);
 router.put('/:id/tracks', ProjectController.saveTracks);
 router.get('/:id/overlays', ProjectController.getOverlays);

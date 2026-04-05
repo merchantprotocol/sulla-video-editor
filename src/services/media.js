@@ -90,6 +90,50 @@ async function extractAudio(inputPath, outputPath) {
 }
 
 /**
+ * Extract waveform amplitude data from an audio file.
+ * Outputs a JSON array of amplitude values (0.0-1.0) sampled at the given rate.
+ * Used for: rendering real waveforms in the track panel, and verifying
+ * transcript timestamp alignment against actual audio activity.
+ *
+ * @param {string} inputPath - audio or video file
+ * @param {string} outputPath - where to write waveform.json
+ * @param {number} samplesPerSecond - resolution (default 100 = 10ms per sample)
+ */
+async function extractWaveform(inputPath, outputPath, samplesPerSecond = 100) {
+  // Use FFmpeg's astats filter to get per-frame RMS amplitude
+  // Output format: one float per line representing the amplitude
+  const { stdout } = await exec('ffmpeg', [
+    '-i', inputPath,
+    '-vn',
+    '-af', `asetnsamples=n=${Math.round(16000 / samplesPerSecond)},astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-`,
+    '-f', 'null', '-',
+  ], { maxBuffer: 50 * 1024 * 1024 }); // 50MB buffer for long files
+
+  // Parse RMS levels from FFmpeg output
+  const lines = stdout.split('\n');
+  const amplitudes = [];
+  for (const line of lines) {
+    const match = line.match(/lavfi\.astats\.Overall\.RMS_level=(-?[\d.]+)/);
+    if (match) {
+      const db = parseFloat(match[1]);
+      // Convert dB to 0-1 linear scale (clamp -60dB to 0dB range)
+      const linear = db <= -60 ? 0 : Math.pow(10, db / 20);
+      amplitudes.push(Math.round(linear * 1000) / 1000); // 3 decimal places
+    }
+  }
+
+  const fs = require('fs/promises');
+  await fs.writeFile(outputPath, JSON.stringify({
+    samples_per_second: samplesPerSecond,
+    sample_count: amplitudes.length,
+    duration_ms: Math.round((amplitudes.length / samplesPerSecond) * 1000),
+    amplitudes,
+  }, null, 0)); // compact JSON — no indentation for large arrays
+
+  return { sample_count: amplitudes.length, duration_ms: Math.round((amplitudes.length / samplesPerSecond) * 1000) };
+}
+
+/**
  * Generate thumbnail images (1 every 10 seconds)
  */
 async function generateThumbnails(inputPath, outputDir) {
@@ -103,4 +147,4 @@ async function generateThumbnails(inputPath, outputDir) {
   ]);
 }
 
-module.exports = { extractMetadata, extractAudio, generateThumbnails, parseFraction };
+module.exports = { extractMetadata, extractAudio, extractWaveform, generateThumbnails, parseFraction };

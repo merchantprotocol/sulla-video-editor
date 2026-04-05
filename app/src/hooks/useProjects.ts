@@ -186,5 +186,9 @@ export function useProject(id: string) {
     return api.get(`/projects/${id}/exports`)
   }
 
-  return { project, files, tracks, setTracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, getOverlays, saveOverlays, saveTracks, renderVideo, renderClip, getExports }
+  async function getWaveform() {
+    return api.get(`/projects/${id}/waveform`)
+  }
+
+  return { project, files, tracks, setTracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, getOverlays, saveOverlays, saveTracks, renderVideo, renderClip, getExports, getWaveform }
 }
