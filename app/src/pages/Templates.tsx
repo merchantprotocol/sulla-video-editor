@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useTemplates, type Template, type TemplateConfig } from '../hooks/useTemplates'
+import { useTemplates, type TemplateConfig } from '../hooks/useTemplates'
 import styles from './Templates.module.css'
 
 const ruleTypes = [
@@ -20,7 +20,7 @@ const sceneTypeColors: Record<string, string> = {
 }
 
 export default function Templates() {
-  const { templates, loading, createTemplate, updateTemplate, deleteTemplate } = useTemplates()
+  const { templates, loading, createTemplate, updateTemplate } = useTemplates()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedScene, setSelectedScene] = useState(0)
   const [creating, setCreating] = useState(false)
@@ -262,9 +262,70 @@ export default function Templates() {
                     <span style={{ color: config.theme.background === 'dark' ? '#6e7681' : '#8b949e', fontSize: 12, marginTop: 8 }}>B-Roll cutaway</span>
                   </div>
                 )}
+                {config.scenes[selectedScene]?.type === 'SideBySide' && (
+                  <div className={styles.sideBySidePreview}>
+                    <div className={styles.sbsPanel} style={{ borderColor: config.theme.accentColor + '60' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="28" height="28" opacity={0.3}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <span style={{ fontSize: 9, color: config.theme.background === 'dark' ? '#6e7681' : '#8b949e', marginTop: 4 }}>Speaker A</span>
+                    </div>
+                    <div className={styles.sbsDivider} style={{ background: config.theme.accentColor }} />
+                    <div className={styles.sbsPanel} style={{ borderColor: config.theme.accentColor + '60' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="28" height="28" opacity={0.3}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <span style={{ fontSize: 9, color: config.theme.background === 'dark' ? '#6e7681' : '#8b949e', marginTop: 4 }}>Speaker B</span>
+                    </div>
+                  </div>
+                )}
+                {config.scenes[selectedScene]?.type === 'CaptionFocus' && (
+                  <div className={styles.captionFocusPreview}>
+                    <div className={styles.cfVideo}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="40" height="40" opacity={0.12}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </div>
+                    <div className={styles.cfCaptions} style={{ background: config.theme.accentColor + '20', borderColor: config.theme.accentColor }}>
+                      <div className={styles.cfLine} style={{ background: config.theme.background === 'dark' ? '#e6edf3' : '#1f2328', width: '80%' }} />
+                      <div className={styles.cfLine} style={{ background: config.theme.background === 'dark' ? '#e6edf3' : '#1f2328', width: '60%', opacity: 0.5 }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Scene label overlay */}
+                <div className={styles.sceneLabel} style={{ color: sceneTypeColors[config.scenes[selectedScene]?.type] || '#6e7681' }}>
+                  {config.scenes[selectedScene]?.type}
+                  {config.scenes[selectedScene]?.duration && <span> / {config.scenes[selectedScene].duration}s</span>}
+                </div>
               </div>
             </div>
-            <div className={styles.formatBadge}>1920 × 1080</div>
+
+            {/* Transport controls */}
+            <div className={styles.transport}>
+              <button className={styles.playBtn} onClick={togglePlay}>
+                {playing ? (
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                )}
+              </button>
+              <div className={styles.progressTrack}>
+                <div className={styles.progressFill} style={{ width: `${progressPercent}%`, background: config.theme.accentColor }} />
+                {/* Scene markers */}
+                {(() => {
+                  const markers: React.ReactNode[] = []
+                  let offset = 0
+                  config.scenes.forEach((s, i) => {
+                    if (i > 0) {
+                      const pct = (offset / totalDuration) * 100
+                      markers.push(<div key={i} className={styles.progressMarker} style={{ left: `${pct}%` }} />)
+                    }
+                    offset += s.duration || DEFAULT_SCENE_DURATION
+                  })
+                  return markers
+                })()}
+              </div>
+              <span className={styles.transportTime}>{Math.floor(globalElapsed)}s / {totalDuration}s</span>
+            </div>
+
+            <div className={styles.formatBadge}>
+              {config.export.defaultFormat === '9:16' ? '1080 x 1920' : '1920 x 1080'}
+            </div>
           </>
         ) : (
           <div className={styles.canvasEmpty}>Select or create a template to start</div>

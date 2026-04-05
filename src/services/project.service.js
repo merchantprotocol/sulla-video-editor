@@ -27,8 +27,17 @@ const ProjectService = {
     const hasTranscript = existsSync(projectPath(project.id, 'data', 'transcript.json'));
     const hasEdl = existsSync(projectPath(project.id, 'data', 'edl.json'));
     const hasSuggestions = existsSync(projectPath(project.id, 'data', 'suggestions.json'));
+    const hasTracks = existsSync(projectPath(project.id, 'data', 'tracks.json'));
 
-    return { project, files: { hasTranscript, hasEdl, hasSuggestions } };
+    // Load tracks if available
+    let tracks = [];
+    if (hasTracks) {
+      try {
+        tracks = JSON.parse(await fs.readFile(projectPath(project.id, 'data', 'tracks.json'), 'utf-8'));
+      } catch {}
+    }
+
+    return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks }, tracks };
   },
 
   async create(userId, { name, ruleTemplate }) {
@@ -89,7 +98,16 @@ const ProjectService = {
     // Extract metadata, audio, thumbnails
     log.info('Extracting metadata', { projectId });
     const metadata = await MediaService.extractMetadata(sourcePath);
-    log.info('Metadata extracted', { projectId, duration_ms: metadata.duration_ms, resolution: metadata.resolution, file_size: metadata.file_size });
+    log.info('Metadata extracted', {
+      projectId, duration_ms: metadata.duration_ms, resolution: metadata.resolution,
+      file_size: metadata.file_size, tracks: metadata.tracks.length,
+    });
+
+    // Save tracks info
+    await fs.writeFile(
+      projectPath(projectId, 'data', 'tracks.json'),
+      JSON.stringify(metadata.tracks, null, 2)
+    );
 
     log.info('Extracting audio', { projectId });
     const audioPath = projectPath(projectId, 'media', 'audio.wav');

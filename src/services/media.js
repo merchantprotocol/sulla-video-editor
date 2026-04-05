@@ -39,9 +39,29 @@ async function extractMetadata(filePath) {
   const width = videoStream?.width || 0;
   const height = videoStream?.height || 0;
 
+  // Build track list from all streams
+  const tracks = (probe.streams || []).map((s, i) => ({
+    index: i,
+    type: s.codec_type, // 'video', 'audio', 'subtitle', 'data'
+    codec: s.codec_name,
+    label: s.tags?.title || s.tags?.handler_name || null,
+    duration_ms: Math.round(parseFloat(s.duration || format.duration || 0) * 1000),
+    ...(s.codec_type === 'video' ? {
+      width: s.width,
+      height: s.height,
+      fps: parseFraction(s.r_frame_rate),
+    } : {}),
+    ...(s.codec_type === 'audio' ? {
+      channels: s.channels,
+      channel_layout: s.channel_layout,
+      sample_rate: parseInt(s.sample_rate || 0),
+    } : {}),
+  }));
+
   return {
     duration_ms: Math.round(durationSec * 1000),
     resolution: width && height ? `${width}x${height}` : null,
+    tracks,
     fps: videoStream ? parseFraction(videoStream.r_frame_rate || '30') : null,
     file_size: parseInt(format.size || 0),
     format: format.format_name,

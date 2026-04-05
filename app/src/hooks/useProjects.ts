@@ -45,9 +45,24 @@ export function useProjects() {
   return { projects, loading, refresh, createProject, deleteProject }
 }
 
+export interface Track {
+  index: number
+  type: 'video' | 'audio' | 'subtitle' | 'data'
+  codec: string
+  label: string | null
+  duration_ms: number
+  width?: number
+  height?: number
+  fps?: number
+  channels?: number
+  channel_layout?: string
+  sample_rate?: number
+}
+
 export function useProject(id: string) {
   const [project, setProject] = useState<Project | null>(null)
-  const [files, setFiles] = useState({ hasTranscript: false, hasEdl: false, hasSuggestions: false })
+  const [files, setFiles] = useState({ hasTranscript: false, hasEdl: false, hasSuggestions: false, hasTracks: false })
+  const [tracks, setTracks] = useState<Track[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -55,6 +70,7 @@ export function useProject(id: string) {
       .then(data => {
         setProject(data.project)
         setFiles(data.files)
+        setTracks(data.tracks || [])
       })
       .catch(() => setProject(null))
       .finally(() => setLoading(false))
@@ -138,5 +154,5 @@ export function useProject(id: string) {
     return api.get(`/projects/${id}/exports`)
   }
 
-  return { project, files, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, renderVideo, renderClip, getExports }
+  return { project, files, tracks, loading, importMedia, transcribe, getTranscript, getEdl, saveEdl, renderVideo, renderClip, getExports }
 }

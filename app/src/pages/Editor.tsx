@@ -11,7 +11,7 @@ interface Transcript { speakers: { id: string; name: string; color: string }[]; 
 
 export default function Editor() {
   const { id } = useParams<{ id: string }>()
-  const { project, files, loading, transcribe, getTranscript, saveEdl, getEdl, renderVideo } = useProject(id!)
+  const { project, files, tracks, loading, transcribe, getTranscript, saveEdl, getEdl, renderVideo } = useProject(id!)
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -596,7 +596,7 @@ export default function Editor() {
                           <span
                             key={`w${item.idx}`}
                             data-word-idx={item.idx}
-                            className={`${styles.word} ${word.filler ? styles.filler : ''} ${isCurrent ? styles.current : ''} ${currentTime > word.end ? styles.played : ''} ${cut ? styles.cut : ''}`}
+                            className={`${styles.word} ${word.filler ? styles.filler : ''} ${isCurrent ? styles.current : ''} ${cut ? styles.cut : ''}`}
                             onClick={() => {
                               if (cut) {
                                 editor.removeCutsInRange(word.start * 1000, word.end * 1000)
@@ -809,7 +809,7 @@ export default function Editor() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 15 12 9 18 15"/></svg>
           </button>
           <span className={styles.tpTitle}>Tracks</span>
-          <span className={styles.tpTrackCount}>4 tracks</span>
+          <span className={styles.tpTrackCount}>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
           <div className={styles.tpSpacer} />
           <div className={styles.tpTransport}>
             <button className={styles.tpBtn} onClick={() => seekRelative(-5)}>
@@ -845,113 +845,66 @@ export default function Editor() {
 
           {/* Track rows */}
           <div className={styles.trackRows}>
-            {/* Screen track */}
-            <div
-              className={`${styles.trackRow} ${selectedTrack === 'track-video' ? styles.trackRowSelected : ''} ${isTrackMuted('track-video') ? styles.trackRowMuted : ''}`}
-              onClick={() => setSelectedTrack('track-video')}
-            >
+            {tracks.length > 0 ? tracks.map((track, idx) => {
+              const trackId = `track-${track.type}-${track.index}`
+              const isVideo = track.type === 'video'
+              const isAudio = track.type === 'audio'
+              const trackColors: Record<string, string[]> = { video: ['var(--accent)', '#785adc', '#e3b341'], audio: ['var(--green)', 'var(--yellow)', '#f0883e'] }
+              const color = (trackColors[track.type] || ['var(--text-dim)'])[tracks.filter((t, i) => t.type === track.type && i < idx).length] || 'var(--text-muted)'
+              const clipStyle = isVideo ? styles.videoClip : styles.micClip
+              const videoIdx = tracks.filter((t, i) => t.type === 'video' && i <= idx).length
+              const audioIdx = tracks.filter((t, i) => t.type === 'audio' && i <= idx).length
+              const name = track.label || (isVideo ? `Video ${videoIdx}` : `Audio ${audioIdx}`)
+              const detail = isVideo
+                ? `${track.width}x${track.height} · ${track.codec}`
+                : `${track.channels || '?'}ch · ${track.sample_rate ? (track.sample_rate / 1000).toFixed(0) + 'kHz' : ''} · ${track.codec}`
+
+              return (
+                <div
+                  key={trackId}
+                  className={`${styles.trackRow} ${selectedTrack === trackId ? styles.trackRowSelected : ''} ${isTrackMuted(trackId) ? styles.trackRowMuted : ''}`}
+                  onClick={() => setSelectedTrack(trackId)}
+                >
               <div className={styles.trackMeta}>
-                <div className={styles.trackColor} style={{ background: 'var(--accent)' }} />
-                <svg className={styles.trackIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                <span className={styles.trackName}>Screen</span>
+                <div className={styles.trackColor} style={{ background: color }} />
+                {isVideo ? (
+                  <svg className={styles.trackIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                ) : (
+                  <svg className={styles.trackIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                )}
+                <span className={styles.trackName} title={detail}>{name}</span>
                 <div className={styles.trackControls}>
-                  <button className={`${styles.trkBtn} ${mutedTracks.has('track-video') ? styles.trkBtnActiveMute : ''}`} onClick={(e) => { e.stopPropagation(); toggleMute('track-video') }} title="Mute">M</button>
-                  <button className={`${styles.trkBtn} ${soloTrack === 'track-video' ? styles.trkBtnActiveSolo : ''}`} onClick={(e) => { e.stopPropagation(); toggleSolo('track-video') }} title="Solo">S</button>
+                  <button className={`${styles.trkBtn} ${mutedTracks.has(trackId) ? styles.trkBtnActiveMute : ''}`} onClick={(e) => { e.stopPropagation(); toggleMute(trackId) }} title="Mute">M</button>
+                  <button className={`${styles.trkBtn} ${soloTrack === trackId ? styles.trkBtnActiveSolo : ''}`} onClick={(e) => { e.stopPropagation(); toggleSolo(trackId) }} title="Solo">S</button>
+                  {isAudio && <input type="range" className={styles.volSlider} min="0" max="100" defaultValue="85" onClick={(e) => e.stopPropagation()} />}
                 </div>
               </div>
               <div className={styles.trackContent}>
-                <div className={`${styles.trackClip} ${styles.videoClip}`} style={{ left: 0, right: '3%' }}>
-                  <span className={styles.clipLabel}>screen-recording.mp4</span>
+                <div className={`${styles.trackClip} ${clipStyle}`} style={{ left: 0, right: '3%' }}>
+                  {isAudio ? (
+                    <div className={styles.waveBars}>
+                      {Array.from({ length: 200 }, (_, i) => (
+                        <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.4 }} />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className={styles.clipLabel}>{name} · {track.codec}</span>
+                  )}
                 </div>
-                {editor.edl.cuts.map((cut, i) => {
+                {editor.edl.cuts.map((cut, ci) => {
                   const start = durationSec > 0 ? (cut.start_ms / 1000 / durationSec) * 100 : 0
-                  const width = durationSec > 0 ? ((cut.end_ms - cut.start_ms) / 1000 / durationSec) * 100 : 0
-                  return <div key={i} className={styles.trackCut} style={{ left: `${start}%`, width: `${width}%` }} />
+                  const w = durationSec > 0 ? ((cut.end_ms - cut.start_ms) / 1000 / durationSec) * 100 : 0
+                  return <div key={ci} className={styles.trackCut} style={{ left: `${start}%`, width: `${w}%` }} />
                 })}
                 <div className={styles.trackPlayhead} style={{ left: `${playPercent}%` }} />
               </div>
             </div>
-
-            {/* Camera track */}
-            <div
-              className={`${styles.trackRow} ${selectedTrack === 'track-camera' ? styles.trackRowSelected : ''} ${isTrackMuted('track-camera') ? styles.trackRowMuted : ''}`}
-              onClick={() => setSelectedTrack('track-camera')}
-            >
-              <div className={styles.trackMeta}>
-                <div className={styles.trackColor} style={{ background: '#785adc' }} />
-                <svg className={styles.trackIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                <span className={styles.trackName}>Camera</span>
-                <div className={styles.trackControls}>
-                  <button className={`${styles.trkBtn} ${mutedTracks.has('track-camera') ? styles.trkBtnActiveMute : ''}`} onClick={(e) => { e.stopPropagation(); toggleMute('track-camera') }} title="Mute">M</button>
-                  <button className={`${styles.trkBtn} ${soloTrack === 'track-camera' ? styles.trkBtnActiveSolo : ''}`} onClick={(e) => { e.stopPropagation(); toggleSolo('track-camera') }} title="Solo">S</button>
-                </div>
+              )
+            }) : (
+              <div className={styles.trackRow} style={{ justifyContent: 'center', color: 'var(--text-dim)', fontSize: 12, padding: 16 }}>
+                No media tracks — import a file to see tracks
               </div>
-              <div className={styles.trackContent}>
-                <div className={`${styles.trackClip} ${styles.cameraClip}`} style={{ left: 0, right: '3%' }}>
-                  <span className={styles.clipLabel}>webcam.mp4</span>
-                </div>
-                <div className={styles.trackPlayhead} style={{ left: `${playPercent}%` }} />
-              </div>
-            </div>
-
-            {/* Microphone track */}
-            <div
-              className={`${styles.trackRow} ${selectedTrack === 'track-mic' ? styles.trackRowSelected : ''} ${isTrackMuted('track-mic') ? styles.trackRowMuted : ''}`}
-              onClick={() => setSelectedTrack('track-mic')}
-            >
-              <div className={styles.trackMeta}>
-                <div className={styles.trackColor} style={{ background: 'var(--green)' }} />
-                <svg className={styles.trackIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                <span className={styles.trackName}>Microphone</span>
-                <div className={styles.trackControls}>
-                  <button className={`${styles.trkBtn} ${mutedTracks.has('track-mic') ? styles.trkBtnActiveMute : ''}`} onClick={(e) => { e.stopPropagation(); toggleMute('track-mic') }} title="Mute">M</button>
-                  <button className={`${styles.trkBtn} ${soloTrack === 'track-mic' ? styles.trkBtnActiveSolo : ''}`} onClick={(e) => { e.stopPropagation(); toggleSolo('track-mic') }} title="Solo">S</button>
-                  <input type="range" className={styles.volSlider} min="0" max="100" defaultValue="85" onClick={(e) => e.stopPropagation()} />
-                </div>
-              </div>
-              <div className={styles.trackContent}>
-                <div className={`${styles.trackClip} ${styles.micClip}`} style={{ left: 0, right: '3%' }}>
-                  <div className={styles.waveBars}>
-                    {micWaveBars.map((h, i) => (
-                      <div key={i} className={styles.wb} style={{ height: `${h}%`, background: 'var(--green)', opacity: 0.4 }} />
-                    ))}
-                  </div>
-                </div>
-                {editor.edl.cuts.map((cut, i) => {
-                  const start = durationSec > 0 ? (cut.start_ms / 1000 / durationSec) * 100 : 0
-                  const width = durationSec > 0 ? ((cut.end_ms - cut.start_ms) / 1000 / durationSec) * 100 : 0
-                  return <div key={i} className={styles.trackCut} style={{ left: `${start}%`, width: `${width}%` }} />
-                })}
-                <div className={styles.trackPlayhead} style={{ left: `${playPercent}%` }} />
-              </div>
-            </div>
-
-            {/* System Audio track */}
-            <div
-              className={`${styles.trackRow} ${selectedTrack === 'track-sys' ? styles.trackRowSelected : ''} ${isTrackMuted('track-sys') ? styles.trackRowMuted : ''}`}
-              onClick={() => setSelectedTrack('track-sys')}
-            >
-              <div className={styles.trackMeta}>
-                <div className={styles.trackColor} style={{ background: 'var(--yellow)' }} />
-                <svg className={styles.trackIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-                <span className={styles.trackName}>System Audio</span>
-                <div className={styles.trackControls}>
-                  <button className={`${styles.trkBtn} ${mutedTracks.has('track-sys') ? styles.trkBtnActiveMute : ''}`} onClick={(e) => { e.stopPropagation(); toggleMute('track-sys') }} title="Mute">M</button>
-                  <button className={`${styles.trkBtn} ${soloTrack === 'track-sys' ? styles.trkBtnActiveSolo : ''}`} onClick={(e) => { e.stopPropagation(); toggleSolo('track-sys') }} title="Solo">S</button>
-                  <input type="range" className={styles.volSlider} min="0" max="100" defaultValue="60" onClick={(e) => e.stopPropagation()} />
-                </div>
-              </div>
-              <div className={styles.trackContent}>
-                <div className={`${styles.trackClip} ${styles.sysClip}`} style={{ left: 0, right: '3%' }}>
-                  <div className={styles.waveBars}>
-                    {sysWaveBars.map((h, i) => (
-                      <div key={i} className={styles.wb} style={{ height: `${h}%`, background: 'var(--yellow)', opacity: 0.4 }} />
-                    ))}
-                  </div>
-                </div>
-                <div className={styles.trackPlayhead} style={{ left: `${playPercent}%` }} />
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
