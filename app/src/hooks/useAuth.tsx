@@ -19,6 +19,7 @@ interface AuthState {
   orgs: Org[]
   currentOrg: Org | null
   loading: boolean
+  onboarded: boolean  // has any user ever been created?
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string, orgName: string) => Promise<void>
   logout: () => void
@@ -32,27 +33,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [orgs, setOrgs] = useState<Org[]>([])
   const [currentOrg, setCurrentOrg] = useState<Org | null>(null)
   const [loading, setLoading] = useState(true)
+  const [onboarded, setOnboarded] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('sulla_token')
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
-    api.get('/auth/me')
-      .then(data => {
-        setUser(data.user)
-        setOrgs(data.orgs || [])
-        const savedOrgId = localStorage.getItem('sulla_org')
-        const org = (data.orgs || []).find((o: Org) => o.id === savedOrgId) || data.orgs?.[0]
-        setCurrentOrg(org || null)
-      })
-      .catch(() => {
-        localStorage.removeItem('sulla_token')
-      })
-      .finally(() => setLoading(false))
+    init()
   }, [])
+
+  async function init() {
+    try {
+      // Check if the system has been set up at all
+      const status = await api.get('/onboarded').catch(() => ({ onboarded: false }))
+      setOnboarded(status.onboarded)
+
+      // If onboarded, try to restore session
+      if (status.onboarded) {
+        const token = localStorage.getItem('sulla_token')
+        if (token) {
+          try {
+            const data = await api.get('/auth/me')
+            setUser(data.user)
+            setOrgs(data.orgs || [])
+            const savedOrgId = localStorage.getItem('sulla_org')
+            const org = (data.orgs || []).find((o: Org) => o.id === savedOrgId) || data.orgs?.[0]
+            setCurrentOrg(org || null)
+          } catch {
+            localStorage.removeItem('sulla_token')
+          }
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function login(email: string, password: string) {
     const data = await api.post('/auth/login', { email, password })
@@ -60,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user)
     setOrgs(data.orgs || [])
     setCurrentOrg(data.orgs?.[0] || null)
+    setOnboarded(true)
   }
 
   async function register(name: string, email: string, password: string, orgName: string) {
@@ -68,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user)
     setOrgs(data.orgs || [])
     setCurrentOrg(data.orgs?.[0] || null)
+    setOnboarded(true)
   }
 
   function logout() {
@@ -87,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, orgs, currentOrg, loading, login, register, logout, switchOrg }}>
+    <AuthContext.Provider value={{ user, orgs, currentOrg, loading, onboarded, login, register, logout, switchOrg }}>
       {children}
     </AuthContext.Provider>
   )

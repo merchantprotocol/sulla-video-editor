@@ -1,0 +1,5 @@
+{
+    "docker": {
+        "port_conflict": "auto"
+    }
+}
