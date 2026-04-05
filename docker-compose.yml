@@ -11,6 +11,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
       - WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
+      - SULLA_API_KEY=${SULLA_API_KEY:-}
       - WAZUH_MANAGER=${WAZUH_MANAGER:-}
       - WAZUH_AGENT_NAME=${WAZUH_AGENT_NAME:-}
     depends_on:

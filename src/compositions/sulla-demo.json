@@ -1,0 +1,74 @@
+{
+  "name": "Sulla Video Editor Demo",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "slides": [
+    {
+      "duration": 5,
+      "text": "Sulla Video Editor",
+      "subtitle": "AI-Powered Video Editing As Code",
+      "background": "#0d1117",
+      "textColor": "#e6edf3",
+      "accentColor": "#5096b3",
+      "fontSize": 72,
+      "subtitleSize": 28,
+      "slideNumber": "01"
+    },
+    {
+      "duration": 5,
+      "text": "Edit By Transcript",
+      "subtitle": "Delete words from text, they disappear from video",
+      "background": "#0d1117",
+      "textColor": "#e6edf3",
+      "accentColor": "#5096b3",
+      "fontSize": 64,
+      "subtitleSize": 24,
+      "slideNumber": "02"
+    },
+    {
+      "duration": 5,
+      "text": "One-Click Cleanup",
+      "subtitle": "Remove fillers, trim silence, enhance audio instantly",
+      "background": "#0d1117",
+      "textColor": "#e6edf3",
+      "accentColor": "#3fb950",
+      "fontSize": 64,
+      "subtitleSize": 24,
+      "slideNumber": "03"
+    },
+    {
+      "duration": 5,
+      "text": "Auto-Generate Clips",
+      "subtitle": "AI finds your best moments for social media",
+      "background": "#0d1117",
+      "textColor": "#e6edf3",
+      "accentColor": "#e3b341",
+      "fontSize": 64,
+      "subtitleSize": 24,
+      "slideNumber": "04"
+    },
+    {
+      "duration": 5,
+      "text": "Video Editing As Code",
+      "subtitle": "Your project is a git repo. Every edit is a commit.",
+      "background": "#0d1117",
+      "textColor": "#e6edf3",
+      "accentColor": "#b392f0",
+      "fontSize": 64,
+      "subtitleSize": 24,
+      "slideNumber": "05"
+    },
+    {
+      "duration": 4,
+      "text": "sulla.video",
+      "subtitle": "Start editing today",
+      "background": "#0d1117",
+      "textColor": "#5096b3",
+      "accentColor": "#5096b3",
+      "fontSize": 80,
+      "subtitleSize": 24,
+      "slideNumber": ""
+    }
+  ]
+}

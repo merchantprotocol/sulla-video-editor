@@ -12,6 +12,7 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
+    "render:demo": "node src/cli/render-demo.js",
     "test": "jest --verbose",
     "test:watch": "jest --watch --verbose"
   },
