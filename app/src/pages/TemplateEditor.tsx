@@ -252,6 +252,42 @@ export default function TemplateEditor() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [selectedLayerId, editingTextLayerId, scene, selectedSceneIdx])
 
+  // ─── Snap-to-edge helper (5% threshold, which is ~5px at 100px canvas width) ───
+  const SNAP_THRESHOLD = (5 / 640) * 100 // 5px in canvas pixels → percentage
+
+  function snapPosition(x: number, y: number, w: number, h: number): { x: number; y: number } {
+    let sx = x, sy = y
+    // Left edge
+    if (Math.abs(x) < SNAP_THRESHOLD) sx = 0
+    // Top edge
+    if (Math.abs(y) < SNAP_THRESHOLD) sy = 0
+    // Right edge (layer right side to canvas right)
+    if (Math.abs((x + w) - 100) < SNAP_THRESHOLD) sx = 100 - w
+    // Bottom edge
+    if (Math.abs((y + h) - 100) < SNAP_THRESHOLD) sy = 100 - h
+    // Center horizontal
+    if (Math.abs((x + w / 2) - 50) < SNAP_THRESHOLD) sx = 50 - w / 2
+    // Center vertical
+    if (Math.abs((y + h / 2) - 50) < SNAP_THRESHOLD) sy = 50 - h / 2
+    return { x: Math.round(sx * 10) / 10, y: Math.round(sy * 10) / 10 }
+  }
+
+  function snapSize(x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
+    let sx = x, sy = y, sw = w, sh = h
+    // Snap right edge to canvas right
+    if (Math.abs((x + w) - 100) < SNAP_THRESHOLD) { sw = 100 - x }
+    // Snap bottom edge to canvas bottom
+    if (Math.abs((y + h) - 100) < SNAP_THRESHOLD) { sh = 100 - y }
+    // Snap left edge to canvas left (for left-handle resize)
+    if (Math.abs(x) < SNAP_THRESHOLD) { sw = sw + sx; sx = 0 }
+    // Snap top edge to canvas top
+    if (Math.abs(y) < SNAP_THRESHOLD) { sh = sh + sy; sy = 0 }
+    return {
+      x: Math.round(sx * 10) / 10, y: Math.round(sy * 10) / 10,
+      w: Math.round(Math.max(2, sw) * 10) / 10, h: Math.round(Math.max(2, sh) * 10) / 10,
+    }
+  }
+
   // ─── Mouse move/up for drag-to-move and resize ───
   useEffect(() => {
     if (!moving && !resizing) return
@@ -268,9 +304,13 @@ export default function TemplateEditor() {
         // Start mouse position as percentage of canvas
         const startPctX = ((moving.startX - rect.left) / rect.width) * 100
         const startPctY = ((moving.startY - rect.top) / rect.height) * 100
-        const newX = moving.startPos.x + (curPctX - startPctX)
-        const newY = moving.startPos.y + (curPctY - startPctY)
-        updateLayer(moving.layerId, { position: { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 } })
+        const rawX = moving.startPos.x + (curPctX - startPctX)
+        const rawY = moving.startPos.y + (curPctY - startPctY)
+        // Get layer size for edge snapping
+        const layer = scene?.layers.find(l => l.id === moving.layerId)
+        const w = layer?.size.w || 0, h = layer?.size.h || 0
+        const snapped = snapPosition(rawX, rawY, w, h)
+        updateLayer(moving.layerId, { position: snapped })
       }
 
       if (resizing) {
@@ -287,9 +327,10 @@ export default function TemplateEditor() {
         if (h.includes('b')) { newH = Math.max(2, resizing.startSize.h + dy) }
         if (h.includes('t')) { newH = Math.max(2, resizing.startSize.h - dy); newY = resizing.startPos.y + dy }
 
+        const snapped = snapSize(newX, newY, newW, newH)
         updateLayer(resizing.layerId, {
-          position: { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 },
-          size: { w: Math.round(newW * 10) / 10, h: Math.round(newH * 10) / 10 },
+          position: { x: snapped.x, y: snapped.y },
+          size: { w: snapped.w, h: snapped.h },
         })
       }
     }
@@ -319,7 +360,10 @@ export default function TemplateEditor() {
     const dropY = ((e.clientY - rect.top) / rect.height) * 100
     const defaults = el.defaults || {}
     const size = defaults.size || { w: 20, h: 15 }
-    addLayer(el.type, { ...defaults, position: { x: Math.round((dropX - size.w / 2) * 10) / 10, y: Math.round((dropY - size.h / 2) * 10) / 10 } })
+    const rawX = dropX - size.w / 2
+    const rawY = dropY - size.h / 2
+    const snapped = snapPosition(rawX, rawY, size.w, size.h)
+    addLayer(el.type, { ...defaults, position: snapped })
   }
 
   function handleCanvasDragOver(e: DragEvent) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }
