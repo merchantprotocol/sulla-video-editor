@@ -5,5 +5,8 @@
     "git": {
         "remotename": "origin",
         "branch": "main"
+    },
+    "lifecycle": {
+        "post_start": []
     }
 }

@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+.env.deployment
 *.mp4
 *.mov
 *.webm
@@ -16,5 +17,6 @@ public/assets/
 public/index.html
 package-lock.json
 logs/
-storage/projects/*.protocol/
-.env.deployment
+
+# All user project data — lives in /data volume, not in repo
+storage/
