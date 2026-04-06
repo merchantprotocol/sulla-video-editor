@@ -230,6 +230,7 @@ export function createSceneWithPreset(type: string): SceneDefinition {
         createLayer('video', { name: 'Screen', zIndex: 0, props: { trackRole: 'main', fit: 'cover', clipShape: 'rectangle' } as VideoLayerProps }),
         createLayer('video', { name: 'Camera', zIndex: 1, size: { w: 18, h: 25 }, position: { x: 78, y: 68 }, borderRadius: 50, border: { width: 3, color: '#ffffff' }, props: { trackRole: 'camera', fit: 'cover', clipShape: 'circle' } as VideoLayerProps, animations: { entrance: { type: 'scaleIn', durationMs: 300, delayMs: 200, easing: 'easeOut' } } }),
         createLayer('caption', { name: 'Captions', zIndex: 2 }),
+        createLayer('text', { name: 'Lower Third', zIndex: 3, size: { w: 28, h: 6 }, position: { x: 3, y: 82 }, props: { text: 'Speaker Name', fontFamily: 'Inter', fontSize: 18, fontWeight: 700, fontColor: '#ffffff', textAlign: 'left', lineHeight: 1.3, letterSpacing: 0, background: 'rgba(0,0,0,0.6)', padding: 10 } as TextLayerProps, animations: { entrance: { type: 'slideUp', durationMs: 400, delayMs: 500, easing: 'easeOut' } } }),
       ]
       break
     case 'TitleCard':

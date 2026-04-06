@@ -8,8 +8,9 @@ export function TextLayer({ layer }) {
       width: '100%',
       height: '100%',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
+      alignItems: textAlign === 'left' ? 'flex-start' : textAlign === 'right' ? 'flex-end' : 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
       fontFamily: fontFamily || 'Inter, sans-serif',
       fontSize: fontSize || 48,
       fontWeight: fontWeight || 600,
@@ -21,8 +22,9 @@ export function TextLayer({ layer }) {
       padding: padding || 0,
       overflow: 'hidden',
       wordBreak: 'break-word',
+      borderRadius: background ? 8 : 0,
     }}>
-      {text || ''}
+      {text || 'Double-click to edit'}
     </div>
   )
 }

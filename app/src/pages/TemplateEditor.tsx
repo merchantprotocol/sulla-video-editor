@@ -452,8 +452,8 @@ export default function TemplateEditor() {
               layout={layout}
               frame={Math.floor(sceneStartFrame + currentFrame)}
               fps={fps}
-              width={layout.canvas.width}
-              height={layout.canvas.height}
+              width={640}
+              height={360}
               tracks={{}}
             />
           </div>

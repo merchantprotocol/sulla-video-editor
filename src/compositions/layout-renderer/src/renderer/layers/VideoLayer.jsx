@@ -3,7 +3,7 @@ import React from 'react'
 /**
  * Video layer — renders a video track frame.
  * In Puppeteer render mode: loads extracted frame image from tracks path.
- * In editor preview mode: shows a placeholder with the track role label.
+ * In editor preview mode: shows a rich placeholder with the track role label.
  */
 export function VideoLayer({ layer, frame, fps, tracks }) {
   const { trackRole, fit, clipShape } = layer.props
@@ -32,28 +32,67 @@ export function VideoLayer({ layer, frame, fps, tracks }) {
     )
   }
 
-  // Preview mode: placeholder
+  // Preview mode: show a realistic placeholder
+  const isCamera = trackRole === 'camera'
+
   return (
     <div style={{
       ...containerStyle,
-      background: trackRole === 'camera'
-        ? 'linear-gradient(135deg, #2a1a3e, #1a1a2e)'
-        : 'linear-gradient(135deg, #1a1a2e, #16213e)',
+      background: isCamera
+        ? 'linear-gradient(145deg, #1e1233, #1a1a2e, #12192e)'
+        : 'linear-gradient(145deg, #0d1117, #161b22, #1c2128)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'column',
-      gap: 4,
+      gap: 6,
+      position: 'relative',
     }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="24" height="24" opacity={0.3}>
-        {trackRole === 'camera'
-          ? <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>
-          : <><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></>
-        }
-      </svg>
-      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {layer.name || trackRole}
-      </span>
+      {/* Fake desktop UI for screen placeholder */}
+      {!isCamera && (
+        <>
+          {/* Title bar */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '8%', minHeight: 8, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', padding: '0 3%', gap: '1.5%' }}>
+            <div style={{ width: '2%', minWidth: 4, height: '2%', minHeight: 4, borderRadius: '50%', background: '#e5534b' }} />
+            <div style={{ width: '2%', minWidth: 4, height: '2%', minHeight: 4, borderRadius: '50%', background: '#d29922' }} />
+            <div style={{ width: '2%', minWidth: 4, height: '2%', minHeight: 4, borderRadius: '50%', background: '#3fb950' }} />
+            <div style={{ flex: 1 }} />
+            <div style={{ width: '20%', height: '40%', background: 'rgba(255,255,255,0.08)', borderRadius: 3 }} />
+            <div style={{ flex: 1 }} />
+          </div>
+          {/* Fake content lines */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2%', alignItems: 'flex-start', width: '70%', marginTop: '4%' }}>
+            <div style={{ width: '80%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3 }} />
+            <div style={{ width: '60%', height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3 }} />
+            <div style={{ width: '90%', height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3 }} />
+            <div style={{ width: '40%', height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 3, marginTop: 4 }} />
+          </div>
+          {/* Code block mockup */}
+          <div style={{ width: '70%', height: '25%', background: 'rgba(0,0,0,0.3)', borderRadius: 4, marginTop: '2%', padding: '3%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ width: '50%', height: 4, background: 'rgba(80,150,179,0.3)', borderRadius: 2 }} />
+            <div style={{ width: '70%', height: 4, background: 'rgba(63,185,80,0.2)', borderRadius: 2 }} />
+            <div style={{ width: '45%', height: 4, background: 'rgba(210,153,34,0.2)', borderRadius: 2 }} />
+          </div>
+        </>
+      )}
+
+      {/* Camera: face silhouette */}
+      {isCamera && (
+        <>
+          <div style={{
+            width: '35%', height: '35%', borderRadius: '50%',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: '60%', height: '60%', color: 'rgba(255,255,255,0.2)' }}>
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>
+            Camera
+          </span>
+        </>
+      )}
     </div>
   )
 }
