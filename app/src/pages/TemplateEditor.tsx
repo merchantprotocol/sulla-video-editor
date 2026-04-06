@@ -104,9 +104,12 @@ export default function TemplateEditor() {
     if (!template || !config) return
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      updateTemplate(template.id, { config: { ...config, layout: l } })
+      updateTemplate(template.id, { config: { ...config, layout: l } }).catch(() => {})
     }, 800)
-  }, [template?.id, config])
+  }, [template?.id, config, updateTemplate])
+
+  // Cleanup save timer on unmount
+  useEffect(() => () => clearTimeout(saveTimer.current), [])
 
   // Update layout + trigger save
   function updateLayout(updater: (prev: SceneLayout) => SceneLayout) {
@@ -159,8 +162,10 @@ export default function TemplateEditor() {
 
   function addScene(type: string) {
     const newScene = createSceneWithPreset(type)
+    const newIdx = layout ? layout.scenes.length : 0
     updateLayout(l => ({ ...l, scenes: [...l.scenes, newScene] }))
-    setSelectedSceneIdx(layout ? layout.scenes.length : 0)
+    // Use callback form to get correct index after state update
+    setTimeout(() => setSelectedSceneIdx(newIdx), 0)
     setSelectedLayerId(null)
   }
 
@@ -196,6 +201,57 @@ export default function TemplateEditor() {
     return () => document.removeEventListener('click', handleClick)
   }, [])
 
+  // ─── Keyboard shortcuts ───
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't intercept when editing text
+      if (editingTextLayerId) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
+      const sel = selectedLayerId
+      if (!sel || !scene) return
+
+      const layer = scene.layers.find(l => l.id === sel)
+      if (!layer) return
+
+      switch (e.key) {
+        case 'Delete':
+        case 'Backspace':
+          e.preventDefault()
+          removeLayer(sel)
+          break
+        case 'Escape':
+          setSelectedLayerId(null)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          updateLayer(sel, { position: { ...layer.position, y: layer.position.y - (e.shiftKey ? 10 : 1) } })
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          updateLayer(sel, { position: { ...layer.position, y: layer.position.y + (e.shiftKey ? 10 : 1) } })
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          updateLayer(sel, { position: { ...layer.position, x: layer.position.x - (e.shiftKey ? 10 : 1) } })
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          updateLayer(sel, { position: { ...layer.position, x: layer.position.x + (e.shiftKey ? 10 : 1) } })
+          break
+        case 'd':
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            const dup = { ...layer, id: `layer-${Date.now()}`, name: `${layer.name} copy`, position: { x: layer.position.x + 2, y: layer.position.y + 2 } }
+            updateLayout(l => { const scenes = [...l.scenes]; scenes[selectedSceneIdx] = { ...scenes[selectedSceneIdx], layers: [...scenes[selectedSceneIdx].layers, dup] }; return { ...l, scenes } })
+            setSelectedLayerId(dup.id)
+          }
+          break
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedLayerId, editingTextLayerId, scene, selectedSceneIdx])
+
   // ─── Mouse move/up for drag-to-move and resize ───
   useEffect(() => {
     if (!moving && !resizing) return
@@ -204,24 +260,24 @@ export default function TemplateEditor() {
 
     function onMouseMove(e: globalThis.MouseEvent) {
       const rect = canvas!.getBoundingClientRect()
-      const pctX = ((e.clientX - rect.left) / rect.width) * 100
-      const pctY = ((e.clientY - rect.top) / rect.height) * 100
+      // Current mouse position as percentage of canvas
+      const curPctX = ((e.clientX - rect.left) / rect.width) * 100
+      const curPctY = ((e.clientY - rect.top) / rect.height) * 100
 
       if (moving) {
-        const dx = pctX - (moving.startX / rect.width) * 100
-        const dy = pctY - (moving.startY / rect.height) * 100
-        const startPctX = (moving.startX - rect.left) / rect.width * 100
-        const startPctY = (moving.startY - rect.top) / rect.height * 100
-        const newX = moving.startPos.x + (pctX - startPctX)
-        const newY = moving.startPos.y + (pctY - startPctY)
+        // Start mouse position as percentage of canvas
+        const startPctX = ((moving.startX - rect.left) / rect.width) * 100
+        const startPctY = ((moving.startY - rect.top) / rect.height) * 100
+        const newX = moving.startPos.x + (curPctX - startPctX)
+        const newY = moving.startPos.y + (curPctY - startPctY)
         updateLayer(moving.layerId, { position: { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 } })
       }
 
       if (resizing) {
-        const startPctX = (resizing.startX - rect.left) / rect.width * 100
-        const startPctY = (resizing.startY - rect.top) / rect.height * 100
-        const dx = pctX - startPctX
-        const dy = pctY - startPctY
+        const startPctX = ((resizing.startX - rect.left) / rect.width) * 100
+        const startPctY = ((resizing.startY - rect.top) / rect.height) * 100
+        const dx = curPctX - startPctX
+        const dy = curPctY - startPctY
         const h = resizing.handle
         let newX = resizing.startPos.x, newY = resizing.startPos.y
         let newW = resizing.startSize.w, newH = resizing.startSize.h
@@ -282,6 +338,7 @@ export default function TemplateEditor() {
     if (!layer) return
     switch (action) {
       case 'duplicate': {
+        if (!layout || selectedSceneIdx >= layout.scenes.length) break
         const dup = { ...layer, id: `layer-${Date.now()}`, name: `${layer.name} copy`, position: { x: layer.position.x + 2, y: layer.position.y + 2 } }
         updateLayout(l => { const scenes = [...l.scenes]; scenes[selectedSceneIdx] = { ...scenes[selectedSceneIdx], layers: [...scenes[selectedSceneIdx].layers, dup] }; return { ...l, scenes } })
         setSelectedLayerId(dup.id)
@@ -446,23 +503,17 @@ export default function TemplateEditor() {
           onDrop={handleCanvasDrop}
           onDragOver={handleCanvasDragOver}
         >
-          {/* Rendered layout (background, non-interactive) */}
-          <div className={styles.canvasRender}>
-            <LayoutRenderer
-              layout={layout}
-              frame={Math.floor(sceneStartFrame + currentFrame)}
-              fps={fps}
-              width={640}
-              height={360}
-              tracks={{}}
-            />
-          </div>
-
-          {/* Interactive layer overlays — on top of render, for selection/move/resize */}
-          {scene?.layers.filter(l => l.visible !== false).map(layer => {
+          {/* Layer rendering + interaction — each layer is both visual AND interactive */}
+          {scene?.layers.filter(l => l.visible !== false).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(layer => {
             const isSelected = selectedLayerId === layer.id
             const isText = layer.type === 'text'
             const isEditingText = editingTextLayerId === layer.id
+            const scale = 640 / (layout.canvas.width || 1920)
+            const tp = layer.props as TextLayerProps
+            const vp = layer.props as VideoLayerProps
+            const sp = layer.props as ShapeLayerProps
+            const cp = layer.props as CaptionLayerProps
+            const ip = layer.props as any
 
             return (
               <div
@@ -474,25 +525,89 @@ export default function TemplateEditor() {
                   width: `${layer.size.w}%`,
                   height: `${layer.size.h}%`,
                   cursor: layer.locked ? 'not-allowed' : (moving?.layerId === layer.id ? 'grabbing' : 'move'),
-                  zIndex: (layer.zIndex || 0) + 50,
+                  zIndex: (layer.zIndex || 0) + 10,
+                  opacity: layer.opacity ?? 1,
+                  borderRadius: layer.borderRadius ? `${layer.borderRadius}%` : undefined,
+                  overflow: 'hidden',
                 }}
                 onMouseDown={e => handleLayerMouseDown(e, layer.id)}
                 onContextMenu={e => handleContextMenu(e, layer.id)}
                 onDoubleClick={isText ? e => handleTextDoubleClick(e, layer.id) : undefined}
               >
-                {/* Inline text editing */}
+                {/* ── VIDEO LAYER ── */}
+                {layer.type === 'video' && (
+                  <div style={{
+                    width: '100%', height: '100%',
+                    background: vp.trackRole === 'camera'
+                      ? 'linear-gradient(145deg, #1e1233, #1a1a2e, #12192e)'
+                      : 'linear-gradient(145deg, #0d1117, #161b22, #1c2128)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4,
+                    borderRadius: vp.clipShape === 'circle' ? '50%' : vp.clipShape === 'rounded' ? '12%' : 0,
+                    border: layer.border ? `${layer.border.width}px solid ${layer.border.color}` : undefined,
+                    position: 'relative',
+                  }}>
+                    {vp.trackRole !== 'camera' && (
+                      <>
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '8%', minHeight: 6, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', padding: '0 3%', gap: '1.5%' }}>
+                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#e5534b' }} />
+                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#d29922' }} />
+                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#3fb950' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start', width: '70%', marginTop: '5%' }}>
+                          <div style={{ width: '80%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2 }} />
+                          <div style={{ width: '55%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }} />
+                          <div style={{ width: '90%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }} />
+                        </div>
+                        <div style={{ width: '70%', height: '20%', background: 'rgba(0,0,0,0.3)', borderRadius: 3, marginTop: '2%', padding: '2%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ width: '50%', height: 3, background: 'rgba(80,150,179,0.3)', borderRadius: 1 }} />
+                          <div style={{ width: '65%', height: 3, background: 'rgba(63,185,80,0.2)', borderRadius: 1 }} />
+                        </div>
+                      </>
+                    )}
+                    {vp.trackRole === 'camera' && (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: '30%', height: '30%', color: 'rgba(255,255,255,0.15)' }}>
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                      </svg>
+                    )}
+                    <span style={{ fontSize: 8 * Math.max(scale, 0.5), color: 'rgba(255,255,255,0.2)', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>
+                      {layer.name}
+                    </span>
+                  </div>
+                )}
+
+                {/* ── TEXT LAYER ── */}
+                {layer.type === 'text' && !isEditingText && (
+                  <div style={{
+                    width: '100%', height: '100%',
+                    display: 'flex', alignItems: 'center', justifyContent: tp.textAlign === 'left' ? 'flex-start' : tp.textAlign === 'right' ? 'flex-end' : 'center',
+                    fontFamily: tp.fontFamily || 'Inter, sans-serif',
+                    fontSize: Math.max(8, (tp.fontSize || 48) * scale),
+                    fontWeight: tp.fontWeight || 600,
+                    color: tp.fontColor || '#ffffff',
+                    textAlign: (tp.textAlign || 'center') as any,
+                    lineHeight: tp.lineHeight || 1.2,
+                    background: tp.background || 'transparent',
+                    padding: tp.padding ? tp.padding * scale : 0,
+                    borderRadius: tp.background ? 6 : 0,
+                    overflow: 'hidden', wordBreak: 'break-word' as const,
+                  }}>
+                    {tp.text || 'Double-click to edit'}
+                  </div>
+                )}
+
+                {/* ── TEXT LAYER (editing mode) ── */}
                 {isText && isEditingText && (
                   <div
                     contentEditable
                     suppressContentEditableWarning
                     className={styles.inlineTextEdit}
                     style={{
-                      fontFamily: (layer.props as TextLayerProps).fontFamily,
-                      fontSize: `${(layer.props as TextLayerProps).fontSize * (640 / layout.canvas.width)}px`,
-                      fontWeight: (layer.props as TextLayerProps).fontWeight,
-                      color: (layer.props as TextLayerProps).fontColor,
-                      textAlign: (layer.props as TextLayerProps).textAlign as any,
-                      lineHeight: (layer.props as TextLayerProps).lineHeight,
+                      fontFamily: tp.fontFamily || 'Inter, sans-serif',
+                      fontSize: `${Math.max(8, (tp.fontSize || 48) * scale)}px`,
+                      fontWeight: tp.fontWeight || 600,
+                      color: tp.fontColor || '#ffffff',
+                      textAlign: (tp.textAlign || 'center') as any,
+                      lineHeight: tp.lineHeight || 1.2,
                       userSelect: 'text',
                     }}
                     onBlur={e => {
@@ -502,7 +617,63 @@ export default function TemplateEditor() {
                     onKeyDown={e => { if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.currentTarget.blur() } }}
                     onMouseDown={e => e.stopPropagation()}
                   >
-                    {(layer.props as TextLayerProps).text}
+                    {tp.text}
+                  </div>
+                )}
+
+                {/* ── CAPTION LAYER ── */}
+                {layer.type === 'caption' && (
+                  <div style={{
+                    width: '100%', height: '100%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, flexWrap: 'wrap' as const,
+                    fontFamily: cp.fontFamily || 'Inter, sans-serif',
+                    fontSize: Math.max(8, (cp.fontSize || 36) * scale),
+                    fontWeight: 700, color: cp.fontColor || '#ffffff',
+                  }}>
+                    {['Building', 'amazing', 'products'].map((word, i) => (
+                      <span key={i} style={{
+                        padding: '2px 5px', borderRadius: 4,
+                        background: i === 1 ? (cp.highlightColor || '#3a7f9e') : (cp.style === 'box' ? 'rgba(0,0,0,0.5)' : 'transparent'),
+                        color: cp.style === 'karaoke' && i !== 1 ? 'rgba(255,255,255,0.4)' : '#ffffff',
+                        textDecoration: cp.style === 'underline' && i === 1 ? 'underline' : 'none',
+                        textDecorationColor: cp.highlightColor || '#3a7f9e',
+                        textUnderlineOffset: 3,
+                        transform: cp.style === 'pop' && i === 1 ? 'scale(1.08)' : 'none',
+                        display: 'inline-block',
+                      }}>{word}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── SHAPE LAYER ── */}
+                {layer.type === 'shape' && (
+                  <div style={{
+                    width: '100%', height: '100%',
+                    background: sp.fill || 'rgba(58,127,158,0.3)',
+                    borderRadius: sp.shape === 'circle' ? '50%' : sp.shape === 'badge' ? 8 : (layer.borderRadius ? `${layer.borderRadius}%` : 0),
+                    border: sp.stroke ? `${sp.stroke.width}px solid ${sp.stroke.color}` : undefined,
+                  }} />
+                )}
+
+                {/* ── IMAGE LAYER ── */}
+                {layer.type === 'image' && (
+                  <div style={{
+                    width: '100%', height: '100%',
+                    background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(58,127,158,0.1))',
+                    border: '1px dashed rgba(255,255,255,0.15)',
+                    borderRadius: layer.borderRadius ? `${layer.borderRadius}%` : 4,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' as const, gap: 3,
+                  }}>
+                    {ip.src ? (
+                      <img src={ip.src} alt={layer.name} style={{ width: '100%', height: '100%', objectFit: ip.fit || 'cover' }} />
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 20, height: 20, color: 'rgba(255,255,255,0.2)' }}>
+                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                        <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.2)', fontWeight: 600, textTransform: 'uppercase' as const, fontFamily: 'Inter, sans-serif' }}>{layer.name}</span>
+                      </>
+                    )}
                   </div>
                 )}
 
