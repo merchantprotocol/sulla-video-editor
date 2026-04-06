@@ -7,7 +7,7 @@ import ExportPanel from '../components/ExportPanel'
 import CaptionsPanel from '../components/CaptionsPanel'
 import AutoClipsPanel, { type AutoClip } from '../components/AutoClipsPanel'
 import UserProfileDropdown from '../components/UserProfileDropdown'
-import { useTemplates, type TemplateConfig } from '../hooks/useTemplates'
+import type { TemplateConfig, Template } from '../hooks/useTemplates'
 import styles from './Editor.module.css'
 
 interface Word { word: string; start: number; end: number; confidence: number; speaker: string; filler?: boolean }
@@ -31,7 +31,13 @@ export default function Editor() {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [layoutPickerOpen, setLayoutPickerOpen] = useState(false)
   const [sceneBreaks, setSceneBreaks] = useState<Set<number>>(new Set())
-  const { templates } = useTemplates()
+  // Fetch templates on demand for the layout picker (not a hook — avoids hook count issues)
+  const [templates, setTemplates] = useState<Template[]>([])
+  useEffect(() => {
+    api.get('/templates').then(data => {
+      setTemplates((data.templates || []).map((t: any) => ({ ...t, config: typeof t.config === 'string' ? JSON.parse(t.config) : t.config })))
+    }).catch(() => {})
+  }, [])
   const videoRef = useRef<HTMLVideoElement>(null)
   const videoFrameRef = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()

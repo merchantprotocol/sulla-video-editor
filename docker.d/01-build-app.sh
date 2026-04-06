@@ -11,7 +11,7 @@ npm install --production 2>/dev/null
 if [ -d "/var/www/html/app" ]; then
   echo "Building React app..."
   cd /var/www/html/app
-  npm install
+  npm install --include=dev
   # Fix binary permissions (npm sometimes loses +x on extracted bins)
   chmod +x node_modules/.bin/* 2>/dev/null || true
   npm run build
