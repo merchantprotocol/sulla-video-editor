@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useTemplates, type TemplateConfig } from '../hooks/useTemplates'
-import { useProjects } from '../hooks/useProjects'
+import { useProjects, useProject } from '../hooks/useProjects'
+import { api } from '../lib/api'
 import {
   type SceneLayout, type LayerDefinition, type LayerType, type AnimationDef,
   type VideoLayerProps, type TextLayerProps, type CaptionLayerProps, type ShapeLayerProps,
@@ -46,8 +47,13 @@ const EXIT_PRESETS: { type: string; label: string }[] = [
 export default function TemplateEditor() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isProjectMode = location.pathname.includes('/editor/') && location.pathname.endsWith('/layout')
   const { templates, loading: templatesLoading, updateTemplate } = useTemplates()
   const { projects, loading: projectsLoading } = useProjects()
+  // Always call useProject (hooks can't be conditional) — just ignore results in template mode
+  const { project: projectData, loading: projectLoading } = useProject(id!)
+
 
   const [leftTab, setLeftTab] = useState<'elements' | 'templates' | 'projects'>('elements')
   const [rightTab, setRightTab] = useState<'style' | 'animate' | 'layout'>('style')
@@ -65,10 +71,16 @@ export default function TemplateEditor() {
   const lastTimeRef = useRef<number>(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
 
-  const template = templates.find(t => t.id === id) || null
-  const config = template?.config as TemplateConfig | undefined
+  // In template mode: load from template. In project mode: load from project's template_config.
+  const template = isProjectMode ? null : (templates.find(t => t.id === id) || null)
+  const config = isProjectMode
+    ? (projectData?.template_config as TemplateConfig | undefined)
+    : (template?.config as TemplateConfig | undefined)
 
-  // Initialize layout from template config or create default
+  const editorTitle = isProjectMode ? (projectData?.name || 'Project Layout') : (template?.name || 'Template')
+  const backPath = isProjectMode ? `/editor/${id}` : '/templates'
+
+  // Initialize layout from config or create default
   const [layout, setLayout] = useState<SceneLayout | null>(null)
 
   useEffect(() => {
@@ -76,7 +88,6 @@ export default function TemplateEditor() {
     if (config.layout) {
       setLayout(config.layout)
     } else {
-      // Bootstrap layout from existing scenes
       const l = createDefaultLayout()
       if (config.scenes?.length) {
         l.scenes = config.scenes.map(s => createSceneWithPreset(s.type))
@@ -87,7 +98,7 @@ export default function TemplateEditor() {
       if (config.theme?.background === 'light') l.canvas.background = '#f6f8fa'
       setLayout(l)
     }
-  }, [config?.layout, template?.id])
+  }, [config?.layout, template?.id, projectData?.id])
 
   // Derived state
   const scene = layout?.scenes[selectedSceneIdx] || null
@@ -99,14 +110,20 @@ export default function TemplateEditor() {
   // Compute scene start frame offset
   const sceneStartFrame = layout?.scenes.slice(0, selectedSceneIdx).reduce((sum, s) => sum + (s.durationSec || 10) * fps, 0) || 0
 
-  // Auto-save layout to template (debounced)
+  // Auto-save layout (debounced) — saves to template or project depending on mode
   const saveLayout = useCallback((l: SceneLayout) => {
-    if (!template || !config) return
+    if (!config) return
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      updateTemplate(template.id, { config: { ...config, layout: l } }).catch(() => {})
+      if (isProjectMode && id) {
+        // Save to project's template_config
+        api.put(`/projects/${id}`, { template_config: { ...config, layout: l } }).catch(() => {})
+      } else if (template) {
+        // Save to template
+        updateTemplate(template.id, { config: { ...config, layout: l } }).catch(() => {})
+      }
     }, 800)
-  }, [template?.id, config, updateTemplate])
+  }, [isProjectMode, id, template?.id, config, updateTemplate])
 
   // Cleanup save timer on unmount
   useEffect(() => () => clearTimeout(saveTimer.current), [])
@@ -419,11 +436,11 @@ export default function TemplateEditor() {
 
   // ─── Render ───
 
-  if (templatesLoading || projectsLoading) {
+  if (templatesLoading || projectsLoading || (isProjectMode && projectLoading)) {
     return <div className={styles.loading}>Loading...</div>
   }
-  if (!template || !config || !layout) {
-    return <div className={styles.loading}>Template not found. <a href="/templates">Back to templates</a></div>
+  if (!config || !layout) {
+    return <div className={styles.loading}>{isProjectMode ? 'Project has no layout.' : 'Template not found.'} <a href={backPath}>Go back</a></div>
   }
 
   const canvasScale = 640 / (layout.canvas.width || 1920)
@@ -435,12 +452,22 @@ export default function TemplateEditor() {
         <a className={styles.logo} href="/" onClick={e => { e.preventDefault(); navigate('/') }}>sulla</a>
         <div className={styles.breadcrumb}>
           <span>/</span>
-          <a href="/templates" onClick={e => { e.preventDefault(); navigate('/templates') }}>Templates</a>
-          <span>/</span>
-          <strong>{template.name}</strong>
+          {isProjectMode ? (
+            <>
+              <a href={backPath} onClick={e => { e.preventDefault(); navigate(backPath) }}>Project</a>
+              <span>/</span>
+              <strong>Layout</strong>
+            </>
+          ) : (
+            <>
+              <a href="/templates" onClick={e => { e.preventDefault(); navigate('/templates') }}>Templates</a>
+              <span>/</span>
+              <strong>{editorTitle}</strong>
+            </>
+          )}
         </div>
         <div className={styles.spacer} />
-        <button className={styles.topBtnSecondary} onClick={() => navigate('/templates')}>
+        <button className={styles.topBtnSecondary} onClick={() => navigate(backPath)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           Back
         </button>

@@ -54,6 +54,7 @@ function AppShell() {
   return (
     <Routes>
       <Route path="/editor/:id" element={<Editor />} />
+      <Route path="/editor/:id/layout" element={<TemplateEditor />} />
       <Route path="/templates/:id" element={<TemplateEditor />} />
       <Route element={<Layout />}>
         <Route index element={<Welcome />} />

@@ -7,8 +7,7 @@ import ExportPanel from '../components/ExportPanel'
 import CaptionsPanel from '../components/CaptionsPanel'
 import AutoClipsPanel, { type AutoClip } from '../components/AutoClipsPanel'
 import UserProfileDropdown from '../components/UserProfileDropdown'
-import VideoOverlays, { type OverlayItem, createOverlay } from '../components/VideoOverlays'
-import OverlayControls from '../components/OverlayControls'
+import { useTemplates, type TemplateConfig } from '../hooks/useTemplates'
 import styles from './Editor.module.css'
 
 interface Word { word: string; start: number; end: number; confidence: number; speaker: string; filler?: boolean }
@@ -30,18 +29,14 @@ export default function Editor() {
   const [clipsOpen, setClipsOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
-  const [overlays, setOverlays] = useState<OverlayItem[]>([])
+  const [layoutPickerOpen, setLayoutPickerOpen] = useState(false)
   const [sceneBreaks, setSceneBreaks] = useState<Set<number>>(new Set())
-  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null)
+  const { templates } = useTemplates()
   const videoRef = useRef<HTMLVideoElement>(null)
   const videoFrameRef = useRef<HTMLDivElement>(null)
-  const overlayCanvasRef = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
 
   // Design canvas size — overlays render at this resolution, then scale down
-  const DESIGN_W = 1920
-  const DESIGN_H = 1080
-  const [canvasScale, setCanvasScale] = useState(1)
 
   // UI state
   const [trackPanelCollapsed, setTrackPanelCollapsed] = useState(false)
@@ -65,7 +60,6 @@ export default function Editor() {
   const [speakerMenuOpen, setSpeakerMenuOpen] = useState<number | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; wordIdx?: number } | null>(null)
   const [trackCtxMenu, setTrackCtxMenu] = useState<{ x: number; y: number; trackId: string; trackType: string; trackName: string } | null>(null)
-  const [overlayCtxMenu, setOverlayCtxMenu] = useState<{ x: number; y: number; overlayId: string } | null>(null)
   const [showSceneBreaks, setShowSceneBreaks] = useState(true)
   const [waveformData, setWaveformData] = useState<number[] | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -87,23 +81,10 @@ export default function Editor() {
     if (files.hasEdl) {
       getEdl().then(edl => editor.setEdl(edl)).catch(() => {})
     }
-    getOverlays().then(data => { if (data.overlays?.length) setOverlays(data.overlays) }).catch(() => {})
     if (files.hasWaveform) {
       getWaveform().then(data => setWaveformData(data.amplitudes || null)).catch(() => {})
     }
   }, [files.hasTranscript, files.hasEdl, files.hasWaveform])
-
-  // Track video frame size → compute overlay canvas scale
-  useEffect(() => {
-    const el = videoFrameRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width
-      if (w > 0) setCanvasScale(w / DESIGN_W)
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [DESIGN_W])
 
   // Auto-save EDL on changes (debounced)
   useEffect(() => {
@@ -115,16 +96,6 @@ export default function Editor() {
       setSaving(false)
     }, 1000)
   }, [editor.undoCount])
-
-  // Auto-save overlays on changes (debounced)
-  const overlaySaveTimer = useRef<ReturnType<typeof setTimeout>>()
-  useEffect(() => {
-    if (overlays.length === 0) return
-    clearTimeout(overlaySaveTimer.current)
-    overlaySaveTimer.current = setTimeout(() => {
-      saveOverlays(overlays).catch(() => {})
-    }, 1000)
-  }, [overlays])
 
   // EDL-aware playback: skip cut regions using rAF for frame-accurate seeking
   useEffect(() => {
@@ -208,9 +179,6 @@ export default function Editor() {
       }
       if (!target.closest(`.${styles.trackCtxMenu}`)) {
         setTrackCtxMenu(null)
-      }
-      if (!target.closest(`.${styles.overlayCtxMenu}`)) {
-        setOverlayCtxMenu(null)
       }
     }
     document.addEventListener('click', handleClick)
@@ -1132,10 +1100,20 @@ export default function Editor() {
 
         {saving && <span className={styles.savingLabel}>Saving...</span>}
 
-        {project?.template_id && (
-          <button className={styles.topBtn} onClick={() => navigate(`/templates/${project.template_id}`)} style={{ background: 'none', border: '1px solid var(--border-visible)', color: 'var(--text-secondary)' }}>
+        {project?.template_config?.layout ? (
+          <>
+            <button className={styles.topBtn} onClick={() => navigate(`/editor/${id}/layout`)} style={{ background: 'none', border: '1px solid var(--accent)', color: 'var(--accent)' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              Edit Layout
+            </button>
+            <button className={styles.topBtn} onClick={() => setLayoutPickerOpen(true)} style={{ background: 'none', border: '1px solid var(--border-visible)', color: 'var(--text-secondary)' }}>
+              Change Layout
+            </button>
+          </>
+        ) : (
+          <button className={styles.topBtn} onClick={() => setLayoutPickerOpen(true)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-            Layout
+            Apply Layout
           </button>
         )}
         <button className={styles.topBtn} onClick={() => setExportOpen(true)}>
@@ -1390,7 +1368,7 @@ export default function Editor() {
         />
 
         <div className={styles.videoSection}>
-          <div className={styles.videoFrame} ref={videoFrameRef} onClick={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'VIDEO') setSelectedOverlayId(null) }}>
+          <div className={styles.videoFrame} ref={videoFrameRef}>
             {project.media_path ? (
               <video
                 ref={videoRef}
@@ -1406,22 +1384,6 @@ export default function Editor() {
                 Video Preview
               </div>
             )}
-            <div
-              className={styles.overlayCanvas}
-              style={{ width: DESIGN_W, height: DESIGN_H, transform: `scale(${canvasScale})` }}
-              ref={overlayCanvasRef}
-            >
-              <VideoOverlays
-                overlays={overlays}
-                selectedId={selectedOverlayId}
-                containerRef={overlayCanvasRef}
-                onSelect={setSelectedOverlayId}
-                onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
-                mediaSrc={project.media_path ? `/api/projects/${project.id}/media/source${project.media_path?.match(/\.\w+$/)?.[0] || '.mp4'}` : undefined}
-                mainVideoRef={videoRef}
-                onContextMenu={(e, id) => { setOverlayCtxMenu({ x: e.clientX, y: e.clientY, overlayId: id }); setSelectedOverlayId(id) }}
-              />
-            </div>
           </div>
           {project.media_path && (
             <div className={styles.videoControls}>
@@ -1444,18 +1406,6 @@ export default function Editor() {
 
         {/* Sulla Sections */}
         <div className={styles.sullaSection}>
-          {/* Overlay controls */}
-          <div className={styles.panelSection}>
-            <OverlayControls
-              overlays={overlays}
-              selectedId={selectedOverlayId}
-              onSelect={setSelectedOverlayId}
-              onAdd={(item) => setOverlays(prev => [...prev, item])}
-              onUpdate={(item) => setOverlays(prev => prev.map(o => o.id === item.id ? item : o))}
-              onRemove={(id) => { setOverlays(prev => prev.filter(o => o.id !== id)); if (selectedOverlayId === id) setSelectedOverlayId(null) }}
-              videoTracks={tracks.filter(t => t.type === 'video').map((t, i) => ({ index: t.index, label: t.label || `Video ${i + 1}`, width: t.width, height: t.height }))}
-            />
-          </div>
 
           {/* Suggestions section */}
           {transcript && (
@@ -1857,122 +1807,67 @@ export default function Editor() {
         </div>
       )}
 
-      {/* ═══ OVERLAY CONTEXT MENU ═══ */}
-      {overlayCtxMenu && (() => {
-        const ov = overlays.find(o => o.id === overlayCtxMenu.overlayId)
-        if (!ov) return null
-        const videoTrackList = tracks.filter(t => t.type === 'video')
-        const updateOv = (patch: Partial<OverlayItem>) => setOverlays(prev => prev.map(o => o.id === ov.id ? { ...o, ...patch } : o))
-        return (
-          <div className={`${styles.ctxMenu} ${styles.ctxMenuOpen} ${styles.overlayCtxMenu}`} style={{ left: overlayCtxMenu.x, top: overlayCtxMenu.y }}>
-            <div className={styles.ctxHeader}>{ov.label || ov.type}</div>
-            <div className={styles.ctxDivider} />
 
-            {/* Video source — PiP only */}
-            {ov.type === 'pip' && videoTrackList.length > 0 && (
-              <>
-                <div className={styles.ctxHeader}>Video Source</div>
-                <button className={`${styles.ctxItem} ${ov.videoTrackIndex == null ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ videoTrackIndex: undefined }); setOverlayCtxMenu(null) }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-                  None (placeholder)
-                </button>
-                {videoTrackList.map((t, i) => (
-                  <button key={t.index} className={`${styles.ctxItem} ${ov.videoTrackIndex === t.index ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ videoTrackIndex: t.index }); setOverlayCtxMenu(null) }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                    {t.label || `Video ${i + 1}`}{t.width ? ` (${t.width}x${t.height})` : ''}
-                  </button>
-                ))}
-                <div className={styles.ctxDivider} />
-              </>
-            )}
-
-            {/* Shape — PiP only */}
-            {ov.type === 'pip' && (
-              <>
-                <div className={styles.ctxHeader}>Shape</div>
-                <button className={`${styles.ctxItem} ${ov.borderRadius === 50 ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ borderRadius: 50, shape: 'circle' }); setOverlayCtxMenu(null) }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>
-                  Circle
-                </button>
-                <button className={`${styles.ctxItem} ${ov.borderRadius === 16 ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ borderRadius: 16, shape: 'rounded' }); setOverlayCtxMenu(null) }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
-                  Rounded
-                </button>
-                <button className={`${styles.ctxItem} ${ov.borderRadius === 0 ? styles.ctxItemActive : ''}`} onClick={() => { updateOv({ borderRadius: 0, shape: 'square' }); setOverlayCtxMenu(null) }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/></svg>
-                  Square
-                </button>
-                <div className={styles.ctxDivider} />
-              </>
-            )}
-
-            {/* Size presets */}
-            <div className={styles.ctxHeader}>Size</div>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ size: { w: 15, h: 22 } }); setOverlayCtxMenu(null) }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="12" height="16" rx="1"/></svg>
-              Small
-            </button>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ size: { w: 20, h: 30 } }); setOverlayCtxMenu(null) }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="3" width="16" height="18" rx="1"/></svg>
-              Medium
-            </button>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ size: { w: 30, h: 42 } }); setOverlayCtxMenu(null) }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="1"/></svg>
-              Large
-            </button>
-            <div className={styles.ctxDivider} />
-
-            {/* Position presets */}
-            <div className={styles.ctxHeader}>Position</div>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 2, y: 2 } }); setOverlayCtxMenu(null) }}>Top Left</button>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 98 - ov.size.w, y: 2 } }); setOverlayCtxMenu(null) }}>Top Right</button>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 2, y: 98 - ov.size.h } }); setOverlayCtxMenu(null) }}>Bottom Left</button>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 98 - ov.size.w, y: 98 - ov.size.h } }); setOverlayCtxMenu(null) }}>Bottom Right</button>
-            <button className={styles.ctxItem} onClick={() => { updateOv({ position: { x: 50 - ov.size.w / 2, y: 50 - ov.size.h / 2 } }); setOverlayCtxMenu(null) }}>Center</button>
-            <div className={styles.ctxDivider} />
-
-            {/* Opacity quick picks */}
-            <div className={styles.ctxHeader}>Opacity</div>
-            <div className={styles.ctxInlineRow}>
-              {[100, 75, 50, 25].map(pct => (
-                <button key={pct} className={`${styles.ctxInlineBtn} ${Math.round((ov.opacity ?? 1) * 100) === pct ? styles.ctxInlineBtnActive : ''}`} onClick={() => { updateOv({ opacity: pct / 100 }); setOverlayCtxMenu(null) }}>{pct}%</button>
-              ))}
+      {/* ═══ LAYOUT PICKER MODAL ═══ */}
+      {layoutPickerOpen && (
+        <div className={styles.cmdOverlay} style={{ opacity: 1, visibility: 'visible' }} onClick={() => setLayoutPickerOpen(false)}>
+          <div className={styles.cmdBox} style={{ width: 600, maxHeight: '70vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18" style={{ color: 'var(--accent)' }}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Apply Layout</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Choose a template to apply to this project. A copy will be created.</div>
+              </div>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => { setLayoutPickerOpen(false); navigate('/templates') }} style={{ padding: '5px 12px', border: '1px solid var(--border-visible)', borderRadius: 6, background: 'none', color: 'var(--accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)' }}>
+                + Create New
+              </button>
             </div>
-            <div className={styles.ctxDivider} />
-
-            {/* Visibility toggle */}
-            <button className={styles.ctxItem} onClick={() => { updateOv({ visible: !ov.visible }); setOverlayCtxMenu(null) }}>
-              {ov.visible ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              )}
-              {ov.visible ? 'Hide' : 'Show'}
-            </button>
-
-            {/* Duplicate */}
-            <button className={styles.ctxItem} onClick={() => {
-              const dup = { ...ov, id: `${ov.type}-${Date.now()}`, position: { x: ov.position.x + 3, y: ov.position.y + 3 }, label: `${ov.label || ov.type} copy` }
-              setOverlays(prev => [...prev, dup])
-              setSelectedOverlayId(dup.id)
-              setOverlayCtxMenu(null)
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Duplicate
-            </button>
-
-            {/* Delete */}
-            <button className={`${styles.ctxItem} ${styles.ctxItemDanger}`} onClick={() => {
-              setOverlays(prev => prev.filter(o => o.id !== ov.id))
-              if (selectedOverlayId === ov.id) setSelectedOverlayId(null)
-              setOverlayCtxMenu(null)
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              Delete <span className={styles.ctxShortcut}>{'\u232B'}</span>
-            </button>
+            <div style={{ padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+              {templates.length === 0 ? (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 32, color: 'var(--text-dim)', fontSize: 13 }}>
+                  No templates yet. Create one first.
+                </div>
+              ) : templates.map(t => {
+                const cfg = t.config as TemplateConfig
+                return (
+                  <div
+                    key={t.id}
+                    style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
+                    onClick={async () => {
+                      // Deep-copy the template's layout into the project
+                      const layoutCopy = cfg?.layout ? JSON.parse(JSON.stringify(cfg.layout)) : null
+                      const configCopy = { ...cfg, layout: layoutCopy || cfg }
+                      try {
+                        await api.put(`/projects/${id}`, { template_id: t.id, template_config: configCopy })
+                        setLayoutPickerOpen(false)
+                        window.location.reload()
+                      } catch { }
+                    }}
+                  >
+                    <div style={{ aspectRatio: '16/9', background: cfg?.theme?.background === 'dark' ? '#0d1117' : '#f6f8fa', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: cfg?.theme?.accentColor || '#3a7f9e' }} />
+                      {cfg?.scenes?.some(s => s.type === 'PiP') && (
+                        <div style={{ position: 'absolute', right: 8, bottom: 16, width: 24, height: 24, borderRadius: '50%', border: `2px solid ${cfg?.theme?.accentColor || '#3a7f9e'}`, background: 'rgba(0,0,0,0.3)' }} />
+                      )}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="20" height="20" opacity={0.15}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </div>
+                    <div style={{ padding: '8px 10px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{t.name}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {cfg?.scenes?.length || 0} scenes
+                        {t.is_system && <span style={{ marginLeft: 4, padding: '0 4px', border: '1px solid var(--border)', borderRadius: 3, fontSize: 8, fontWeight: 600, color: 'var(--text-dim)' }}>system</span>}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* ═══ COMMAND PALETTE ═══ */}
       <div className={`${styles.cmdOverlay} ${cmdOpen ? styles.cmdOverlayOpen : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setCmdOpen(false) }}>
