@@ -16,4 +16,5 @@ public/assets/
 public/index.html
 package-lock.json
 logs/
-storage/projects/*
+storage/projects/*.protocol/
+.env.deployment

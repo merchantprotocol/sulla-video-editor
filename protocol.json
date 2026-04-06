@@ -1,0 +1,9 @@
+{
+    "protocol_version": 1,
+    "name": "sulla-video-editor",
+    "project_type": "php82",
+    "git": {
+        "remotename": "origin",
+        "branch": "main"
+    }
+}
