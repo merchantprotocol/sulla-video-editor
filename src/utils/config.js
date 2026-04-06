@@ -6,7 +6,7 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || 'sulla-local-dev-secret',
   apiKey: process.env.SULLA_API_KEY || null,
   jwtExpirySeconds: 60 * 60 * 24 * 30, // 30 days (local app, not SaaS)
-  storageRoot: path.join(__dirname, '..', '..', 'storage', 'projects'),
+  storageRoot: process.env.DATA_DIR || path.join(__dirname, '..', '..', 'storage', 'projects'),
   whisperCli: process.env.WHISPER_CLI || 'whisper-cli',
   whisperModel: process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggml-base.en.bin',
   sullaChatUrl: process.env.SULLA_CHAT_URL || 'http://localhost:3000/v1/chat/completions',

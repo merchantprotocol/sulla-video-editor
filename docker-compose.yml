@@ -7,14 +7,16 @@ services:
       - "${APP_SSL_PORT:-443}:443"
     volumes:
       - "./:/var/www/html:rw"
+      - "appdata:/data"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
       - WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
+      - DATA_DIR=/data
+      - INBOX_DIR=/data/inbox
       - SULLA_API_KEY=${SULLA_API_KEY:-}
       - SULLA_CHAT_URL=${SULLA_CHAT_URL:-}
       - SULLA_BEARER_TOKEN=${SULLA_BEARER_TOKEN:-}
-      - INBOX_DIR=${INBOX_DIR:-/var/www/html/storage/inbox}
       - INBOX_TEMPLATE_ID=${INBOX_TEMPLATE_ID:-system-screencast}
       - WAZUH_MANAGER=${WAZUH_MANAGER:-}
       - WAZUH_AGENT_NAME=${WAZUH_AGENT_NAME:-}
@@ -63,3 +65,4 @@ services:
 
 volumes:
   pgdata:
+  appdata:
