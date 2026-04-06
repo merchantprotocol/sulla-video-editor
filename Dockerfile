@@ -67,3 +67,6 @@ RUN npx playwright install chromium --with-deps 2>/dev/null \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
+
+# Override node startup to run build script first, then start the app
+RUN sed -i 's|command=/usr/bin/node /var/www/html/src/index.js|command=/bin/bash -c "cd /var/www/html \&\& bash docker.d/01-build-app.sh \&\& exec /usr/bin/node src/index.js"|' /etc/supervisor/supervisord.conf

@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "build": "cd app && npm install && npm run build && cp -r dist/* ../public/",
+    "build": "cd app && npm install && chmod +x node_modules/.bin/* && npm run build && cp -r dist/* ../public/",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
