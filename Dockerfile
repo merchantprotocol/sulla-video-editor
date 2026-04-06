@@ -68,7 +68,3 @@ RUN npx playwright install chromium --with-deps 2>/dev/null \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
 
-# Override node startup: run build script first, then start node
-# The wrapper script lives in the volume-mounted project dir so code
-# changes take effect on restart without rebuilding the image
-RUN sed -i 's|command=/usr/bin/node /var/www/html/src/index.js|command=/bin/bash /var/www/html/docker.d/start-node.sh|' /etc/supervisor/supervisord.conf
