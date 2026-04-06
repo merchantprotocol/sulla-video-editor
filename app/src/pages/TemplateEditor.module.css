@@ -150,3 +150,82 @@
 .gridBtn { flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; text-align: center; font-size: 10px; font-weight: 600; color: var(--text-dim); transition: all 0.1s; font-family: var(--sans); }
 .gridBtn:hover { border-color: var(--accent); color: var(--text-secondary); }
 .gridBtnActive { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+/* Layer list */
+.layerItem { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: all 0.1s; font-size: 12px; margin-bottom: 2px; }
+.layerItem:hover { background: var(--bg-elevated); }
+.layerItemActive { background: var(--accent-soft); }
+.layerDot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.layerName { flex: 1; color: var(--text-secondary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.layerDel { width: 18px; height: 18px; border: none; background: none; color: var(--text-dim); cursor: pointer; font-size: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.layerDel:hover { background: var(--red-soft, rgba(207,34,46,0.08)); color: #cf222e; }
+
+/* Canvas render layer (non-interactive, sits behind overlays) */
+.canvasRender { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.canvasRender > * { width: 100%; height: 100%; transform-origin: top left; transform: scale(calc(640 / 1920)); }
+
+/* Interactive layer overlay — sits on top for click/drag/resize */
+.layerOverlay { position: absolute; border: 1px solid transparent; transition: border-color 0.08s; z-index: 50; }
+.layerOverlay:hover { border-color: rgba(58,127,158,0.4); }
+.layerOverlaySelected { border-color: var(--accent) !important; }
+.layerOverlayLocked { opacity: 0.7; }
+
+/* Resize handles */
+.handle { position: absolute; width: 8px; height: 8px; background: white; border: 2px solid var(--accent); border-radius: 50%; z-index: 60; }
+.handleTL { top: -4px; left: -4px; cursor: nw-resize; }
+.handleTR { top: -4px; right: -4px; cursor: ne-resize; }
+.handleBL { bottom: -4px; left: -4px; cursor: sw-resize; }
+.handleBR { bottom: -4px; right: -4px; cursor: se-resize; }
+.handleT { top: -4px; left: 50%; margin-left: -4px; cursor: n-resize; }
+.handleB { bottom: -4px; left: 50%; margin-left: -4px; cursor: s-resize; }
+.handleL { top: 50%; left: -4px; margin-top: -4px; cursor: w-resize; }
+.handleR { top: 50%; right: -4px; margin-top: -4px; cursor: e-resize; }
+
+/* Inline text editing */
+.inlineTextEdit { width: 100%; height: 100%; outline: none; cursor: text; overflow: hidden; word-break: break-word; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); border: 1px dashed var(--accent); border-radius: 2px; }
+
+/* Context menu */
+.ctxMenu { position: fixed; z-index: 200; background: var(--bg-surface); border: 1px solid var(--border-visible); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); padding: 4px; min-width: 180px; }
+.ctxHeader { padding: 6px 12px 2px; font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.ctxDivider { height: 1px; background: var(--border); margin: 4px 0; }
+.ctxItem { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 12px; color: var(--text-secondary); cursor: pointer; border-radius: 6px; border: none; background: none; width: 100%; font-family: var(--sans); transition: all 0.08s; }
+.ctxItem:hover { background: var(--accent-soft); color: var(--text-primary); }
+.ctxItem svg { width: 14px; height: 14px; flex-shrink: 0; }
+.ctxItemDanger { color: #cf222e; }
+.ctxItemDanger:hover { background: rgba(207,34,46,0.06); }
+
+/* Transport / playback */
+.transport { display: flex; align-items: center; gap: 8px; margin-top: 10px; width: 640px; }
+.playBtn { width: 32px; height: 28px; border: 1px solid var(--border-visible); border-radius: 6px; background: var(--bg-surface); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; color: var(--text-secondary); }
+.playBtn:hover { background: var(--bg-elevated); }
+.scrubber { flex: 1; height: 4px; accent-color: var(--accent); cursor: pointer; }
+.frameLabel { font-size: 10px; font-family: var(--mono); color: var(--text-dim); width: 72px; text-align: right; flex-shrink: 0; }
+
+/* Scene add buttons */
+.sceneAddBtns { display: flex; gap: 3px; }
+.sceneAddBtn { padding: 2px 8px; border: 1px dashed var(--border-visible); border-radius: 4px; background: none; font-size: 9px; font-weight: 600; color: var(--text-dim); cursor: pointer; font-family: var(--sans); transition: all 0.1s; }
+.sceneAddBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.sceneCardActive { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-soft); }
+.sceneRemBtn { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border: none; background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.6); border-radius: 3px; font-size: 11px; cursor: pointer; display: none; align-items: center; justify-content: center; }
+.sceneCard:hover .sceneRemBtn { display: flex; }
+.sceneCard { position: relative; }
+
+/* Quick actions */
+.quickActions { display: flex; gap: 4px; flex-wrap: wrap; }
+.qaBtn { padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; background: none; font-size: 11px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.12s; font-family: var(--sans); }
+.qaBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.qaBtnDanger { color: #cf222e; border-color: rgba(207,34,46,0.2); }
+.qaBtnDanger:hover { background: rgba(207,34,46,0.06); border-color: #cf222e; color: #cf222e; }
+
+/* Swatches */
+.swatchRow { display: flex; gap: 4px; }
+.swatch { width: 22px; height: 22px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; transition: all 0.1s; }
+.swatch:hover { transform: scale(1.1); }
+.swatchActive { border-color: var(--text-primary); box-shadow: 0 0 0 2px var(--bg-surface); }
+
+/* Property inputs */
+.propInput { width: 56px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; font-family: var(--mono); background: var(--bg-elevated); color: var(--text-primary); outline: none; text-align: center; }
+.propInput:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.propInputWide { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--sans); background: var(--bg-elevated); color: var(--text-primary); outline: none; }
+.propInputWide:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.colorInput { width: 28px; height: 28px; border: 2px solid var(--border); border-radius: 6px; cursor: pointer; padding: 0; background: none; }

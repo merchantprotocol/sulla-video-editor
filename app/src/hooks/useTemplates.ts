@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
+import type { SceneLayout } from '../types/scene-layout'
 
 export interface TemplateConfig {
   theme: {
@@ -23,6 +24,7 @@ export interface TemplateConfig {
     defaultResolution: string
     defaultCodec: string
   }
+  layout?: SceneLayout
 }
 
 export interface Template {
