@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useTemplates, type TemplateConfig } from '../hooks/useTemplates'
-import { useProjects, useProject } from '../hooks/useProjects'
+import { useProjects } from '../hooks/useProjects'
 import { api } from '../lib/api'
 import {
   type SceneLayout, type LayerDefinition, type LayerType, type AnimationDef,
@@ -51,8 +51,15 @@ export default function TemplateEditor() {
   const isProjectMode = location.pathname.includes('/editor/') && location.pathname.endsWith('/layout')
   const { templates, loading: templatesLoading, updateTemplate } = useTemplates()
   const { projects, loading: projectsLoading } = useProjects()
-  // Always call useProject (hooks can't be conditional) — just ignore results in template mode
-  const { project: projectData, loading: projectLoading } = useProject(id!)
+
+  // In project mode, fetch project data manually (can't conditionally call hooks)
+  const [projectData, setProjectData] = useState<any>(null)
+  const [projectLoading, setProjectLoading] = useState(false)
+  useEffect(() => {
+    if (!isProjectMode || !id) return
+    setProjectLoading(true)
+    api.get(`/projects/${id}`).then(data => setProjectData(data.project || data)).catch(() => {}).finally(() => setProjectLoading(false))
+  }, [isProjectMode, id])
 
 
   const [leftTab, setLeftTab] = useState<'elements' | 'templates' | 'projects'>('elements')
