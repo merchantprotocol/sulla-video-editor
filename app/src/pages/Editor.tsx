@@ -1805,14 +1805,17 @@ export default function Editor() {
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)' }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.transform = 'none'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
                     onClick={async () => {
-                      // Deep-copy the template's layout into the project
-                      const layoutCopy = cfg?.layout ? JSON.parse(JSON.stringify(cfg.layout)) : null
-                      const configCopy = { ...cfg, layout: layoutCopy || cfg }
+                      // Deep-copy the template's config into the project's template_config
+                      const configCopy = JSON.parse(JSON.stringify(cfg || {}))
+                      // Only set template_id if it's a valid UUID (not a system slug)
+                      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t.id)
+                      const updates: Record<string, any> = { template_config: configCopy }
+                      if (isUUID) updates.template_id = t.id
                       try {
-                        await api.put(`/projects/${id}`, { template_id: t.id, template_config: configCopy })
+                        await api.put(`/projects/${id}`, updates)
                         setLayoutPickerOpen(false)
                         window.location.reload()
-                      } catch { }
+                      } catch (err) { console.error('Failed to apply layout:', err) }
                     }}
                   >
                     <div style={{ aspectRatio: '16/9', background: cfg?.theme?.background === 'dark' ? '#0d1117' : '#f6f8fa', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
