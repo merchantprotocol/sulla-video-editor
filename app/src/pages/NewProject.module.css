@@ -54,3 +54,22 @@
 .uploadLabel { font-size: 11px; font-family: var(--mono); color: var(--text-muted); margin-top: 6px; text-align: center; }
 
 .error { padding: 10px 14px; background: var(--red-soft); border: 1px solid rgba(207,34,46,0.15); border-radius: 8px; color: var(--red); font-size: 12px; font-weight: 500; margin-bottom: 16px; }
+
+.captureSection { margin-bottom: 24px; }
+.captureList { display: flex; flex-direction: column; gap: 8px; }
+.captureCard { padding: 12px 14px; background: var(--bg-surface); border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.12s; }
+.captureCard:hover { border-color: var(--border-visible); }
+.captureCard.selected { border-color: var(--accent); background: var(--accent-soft); }
+.captureCardHeader { display: flex; align-items: center; gap: 10px; }
+.captureIcon { width: 36px; height: 36px; background: var(--bg-elevated); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); }
+.captureIcon svg { width: 18px; height: 18px; }
+.captureInfo { flex: 1; }
+.captureDate { font-size: 13px; font-weight: 600; }
+.captureMeta { font-size: 11px; color: var(--text-muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+.streamBadge { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-dim); }
+.previewBtn { font-size: 11px; padding: 4px 10px; background: none; border: 1px solid var(--border-visible); border-radius: 6px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.previewBtn:hover { border-color: var(--accent); color: var(--accent); }
+.capturePreview { margin-top: 10px; }
+.capturePreview video { width: 100%; max-height: 200px; border-radius: 8px; background: #000; }
+.captureEmpty { padding: 16px; text-align: center; font-size: 12px; color: var(--text-dim); }
+.dimmed { opacity: 0.5; pointer-events: none; }

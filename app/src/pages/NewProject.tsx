@@ -1,18 +1,62 @@
 import { useNavigate } from 'react-router-dom'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { chunkedUpload, formatBytes } from '../lib/chunkedUpload'
-import { useTemplates, type Template, type TemplateConfig } from '../hooks/useTemplates'
 import styles from './NewProject.module.css'
 
-const ruleIcons: Record<string, string> = {
-  podcast: '🎙️', youtube: '🎬', social: '📱', tutorial: '📚', interview: '🎤',
+interface CaptureStream {
+  id: string
+  type: string
+  filename: string
+  format: string
+  startOffset: number
+  bytes: number
+}
+
+interface Capture {
+  id: string
+  sessionDir: string
+  startedAt: string
+  duration: number
+  totalBytes: number
+  streams: CaptureStream[]
+  primaryFilePath: string | null
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}m ${String(s).padStart(2, '0')}s`
+}
+
+function formatCaptureDate(isoString: string): string {
+  const d = new Date(isoString)
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  }).replace(',', ' ·')
+}
+
+const STREAM_LABELS: Record<string, string> = {
+  screen: 'Screen',
+  camera: 'Cam',
+  mic: 'Mic',
+  'system-audio': 'Sys',
+}
+
+// Simple inline SVG icons for stream types
+function ScreenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="3" width="20" height="14" rx="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>
+  )
 }
 
 export default function NewProject() {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { templates, loading: templatesLoading } = useTemplates()
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [projectName, setProjectName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -21,10 +65,28 @@ export default function NewProject() {
   const [error, setError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
+  // Captures state
+  const [captures, setCaptures] = useState<Capture[]>([])
+  const [capturesLoading, setCapturesLoading] = useState(true)
+  const [selectedCapture, setSelectedCapture] = useState<Capture | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const token = localStorage.getItem('sulla_token')
+    fetch('/api/captures', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : { captures: [] })
+      .then(data => setCaptures(data.captures || []))
+      .catch(() => setCaptures([]))
+      .finally(() => setCapturesLoading(false))
+  }, [])
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (f) {
       setFile(f)
+      setSelectedCapture(null)
       if (!projectName) {
         setProjectName(f.name.replace(/\.\w+$/, '').replace(/[_-]/g, ' '))
       }
@@ -36,10 +98,25 @@ export default function NewProject() {
     const f = e.dataTransfer.files[0]
     if (f) {
       setFile(f)
+      setSelectedCapture(null)
       if (!projectName) {
         setProjectName(f.name.replace(/\.\w+$/, '').replace(/[_-]/g, ' '))
       }
     }
+  }
+
+  function handleSelectCapture(capture: Capture) {
+    setSelectedCapture(capture)
+    setFile(null)
+    setProjectName(formatCaptureDate(capture.startedAt))
+  }
+
+  function getPrimaryFilename(capture: Capture): string | null {
+    const screenStream = capture.streams.find(s => s.type === 'screen')
+    const cameraStream = capture.streams.find(s => s.type === 'camera')
+    const firstWebm = capture.streams.find(s => s.format === 'webm' || s.filename?.endsWith('.webm'))
+    const primary = screenStream || cameraStream || firstWebm
+    return primary?.filename ?? null
   }
 
   async function handleCreate() {
@@ -58,36 +135,47 @@ export default function NewProject() {
         'Authorization': `Bearer ${token}`,
       }
 
-      // 1. Create project
-      setProgress('Creating project...')
-      const selected = templates.find(t => t.id === selectedTemplateId)
-      const createRes = await fetch('/api/projects', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          name: projectName,
-          template_id: selectedTemplateId || undefined,
-          rule_template: selected?.slug || 'custom',
-        }),
-        signal: abort.signal,
-      })
-      if (!createRes.ok) throw new Error((await createRes.json()).error)
-      const { project } = await createRes.json()
+      if (selectedCapture && !file) {
+        // Ingest capture via single POST
+        setProgress('Importing capture...')
+        const ingestRes = await fetch('/api/projects/ingest', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            name: projectName,
+            filePath: selectedCapture.primaryFilePath,
+          }),
+          signal: abort.signal,
+        })
+        if (!ingestRes.ok) throw new Error((await ingestRes.json()).error)
+        const { project } = await ingestRes.json()
+        navigate(`/editor/${project.id}`)
+      } else {
+        // Create project (with optional file upload)
+        setProgress('Creating project...')
+        const createRes = await fetch('/api/projects', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ name: projectName }),
+          signal: abort.signal,
+        })
+        if (!createRes.ok) throw new Error((await createRes.json()).error)
+        const { project } = await createRes.json()
 
-      // 2. Upload media via chunked upload (if file selected)
-      if (file) {
-        setProgress(`Uploading ${file.name}...`)
-        await chunkedUpload(project.id, file, (p) => {
-          setUploadPercent(p.percent)
-          if (p.phase === 'uploading') {
-            setProgress(`Uploading... ${p.percent}% (${formatBytes(p.bytesUploaded)} / ${formatBytes(p.totalBytes)})`)
-          } else {
-            setProgress('Processing media...')
-          }
-        }, abort.signal)
+        if (file) {
+          setProgress(`Uploading ${file.name}...`)
+          await chunkedUpload(project.id, file, (p) => {
+            setUploadPercent(p.percent)
+            if (p.phase === 'uploading') {
+              setProgress(`Uploading... ${p.percent}% (${formatBytes(p.bytesUploaded)} / ${formatBytes(p.totalBytes)})`)
+            } else {
+              setProgress('Processing media...')
+            }
+          }, abort.signal)
+        }
+
+        navigate(`/editor/${project.id}`)
       }
-
-      navigate(`/editor/${project.id}`)
     } catch (err: any) {
       if (err.name === 'AbortError') {
         setProgress('')
@@ -109,8 +197,8 @@ export default function NewProject() {
 
         {/* Drop zone */}
         <div
-          className={`${styles.dropZone} ${file ? styles.hasFile : ''}`}
-          onClick={() => !file && fileInputRef.current?.click()}
+          className={`${styles.dropZone} ${file ? styles.hasFile : ''} ${selectedCapture ? styles.dimmed : ''}`}
+          onClick={() => !file && !selectedCapture && fileInputRef.current?.click()}
           onDragOver={e => e.preventDefault()}
           onDrop={handleDrop}
         >
@@ -138,6 +226,71 @@ export default function NewProject() {
         </div>
         <input ref={fileInputRef} type="file" accept="video/*,audio/*" style={{ display: 'none' }} onChange={handleFileSelect} />
 
+        {/* Captures section */}
+        <div className={styles.captureSection}>
+          <label className={styles.formLabel}>Your Captures</label>
+          {capturesLoading ? (
+            <div className={styles.captureEmpty}>Loading captures...</div>
+          ) : captures.length === 0 ? (
+            <div className={styles.captureEmpty}>No captures yet — record in Capture Studio first.</div>
+          ) : (
+            <div className={styles.captureList}>
+              {captures.map(capture => {
+                const isSelected = selectedCapture?.id === capture.id
+                const isPreviewing = previewId === capture.id
+                const primaryFilename = getPrimaryFilename(capture)
+
+                return (
+                  <div
+                    key={capture.id}
+                    className={`${styles.captureCard} ${isSelected ? styles.selected : ''}`}
+                    onClick={() => handleSelectCapture(capture)}
+                  >
+                    <div className={styles.captureCardHeader}>
+                      <div className={styles.captureIcon}>
+                        <ScreenIcon />
+                      </div>
+                      <div className={styles.captureInfo}>
+                        <div className={styles.captureDate}>{formatCaptureDate(capture.startedAt)}</div>
+                        <div className={styles.captureMeta}>
+                          <span>{formatDuration(capture.duration)}</span>
+                          <span>{formatBytes(capture.totalBytes)}</span>
+                          {capture.streams.map(s => (
+                            <span key={s.id} className={styles.streamBadge}>
+                              {STREAM_LABELS[s.type] ?? s.type}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {primaryFilename && (
+                        <button
+                          className={styles.previewBtn}
+                          onClick={e => {
+                            e.stopPropagation()
+                            setPreviewId(isPreviewing ? null : capture.id)
+                          }}
+                        >
+                          {isPreviewing ? '✕ Close' : '▶ Preview'}
+                        </button>
+                      )}
+                    </div>
+                    {isPreviewing && primaryFilename && (
+                      <div className={styles.capturePreview}>
+                        <video
+                          src={`/api/captures/${capture.id}/media/${primaryFilename}`}
+                          controls
+                          muted
+                          style={{ width: '100%', maxHeight: 200, borderRadius: 8, marginTop: 8 }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Project name */}
         <div className={styles.formSection}>
           <label className={styles.formLabel}>Project Name</label>
@@ -147,64 +300,6 @@ export default function NewProject() {
             onChange={e => setProjectName(e.target.value)}
             placeholder="My Project"
           />
-        </div>
-
-        {/* Template selection */}
-        <div className={styles.formSection}>
-          <label className={styles.formLabel}>Template</label>
-          <div className={styles.ruleGrid}>
-            {templatesLoading ? (
-              <div style={{ padding: 12, color: 'var(--text-dim)', fontSize: 12 }}>Loading templates...</div>
-            ) : (
-              <>
-                {templates.map(t => {
-                  const cfg = t.config as TemplateConfig | undefined
-                  const icon = ruleIcons[t.slug || ''] || '🎞️'
-                  const rulesDesc = cfg?.rules ? [
-                    cfg.rules.removeFillers && 'Remove fillers',
-                    cfg.rules.trimSilence?.enabled && 'Trim silence',
-                    cfg.rules.studioSound && 'Studio sound',
-                    cfg.rules.autoCaptions && 'Auto captions',
-                    cfg.rules.autoClips && 'Auto clips',
-                  ].filter(Boolean).join(', ') : ''
-
-                  return (
-                    <div
-                      key={t.id}
-                      className={`${styles.ruleCard} ${selectedTemplateId === t.id ? styles.selected : ''}`}
-                      onClick={() => setSelectedTemplateId(t.id)}
-                    >
-                      <div className={styles.ruleIcon}>{icon}</div>
-                      <div className={styles.ruleInfo}>
-                        <div className={styles.ruleName}>
-                          {t.name}
-                          {t.is_system && <span className={styles.systemBadge}>system</span>}
-                        </div>
-                        <div className={styles.ruleDesc}>{t.description || rulesDesc}</div>
-                      </div>
-                      <div className={styles.ruleCheck}>
-                        {selectedTemplateId === t.id && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                      </div>
-                    </div>
-                  )
-                })}
-                {/* Custom / no template option */}
-                <div
-                  className={`${styles.ruleCard} ${selectedTemplateId === null ? styles.selected : ''}`}
-                  onClick={() => setSelectedTemplateId(null)}
-                >
-                  <div className={styles.ruleIcon}>+</div>
-                  <div className={styles.ruleInfo}>
-                    <div className={styles.ruleName}>Custom</div>
-                    <div className={styles.ruleDesc}>Start with no rules, build your own</div>
-                  </div>
-                  <div className={styles.ruleCheck}>
-                    {selectedTemplateId === null && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
         </div>
 
         {error && <div className={styles.error}>{error}</div>}
@@ -232,7 +327,7 @@ export default function NewProject() {
             ) : (
               <>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                {file ? 'Create & Import' : 'Create Project'}
+                {file ? 'Create & Import' : selectedCapture ? 'Create & Import' : 'Create Project'}
               </>
             )}
           </button>
