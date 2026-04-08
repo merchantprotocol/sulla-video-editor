@@ -21,6 +21,7 @@ export default function Editor() {
   const editor = useEditor()
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
+  const [videoDuration, setVideoDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -857,12 +858,14 @@ export default function Editor() {
     else toast(action)
   }
 
-  // Generate waveform bars
-  const micWaveBars = useMemo(() => Array.from({ length: 200 }, () => 15 + Math.random() * 70), [])
-  const sysWaveBars = useMemo(() => Array.from({ length: 200 }, () => 15 + Math.random() * 70), [])
+  // Stable placeholder bars (memoized so they don't flicker on re-render)
+  const placeholderBars = useMemo(() => Array.from({ length: 200 }, () => 15 + Math.random() * 70), [])
+  const micWaveBars = placeholderBars
+  const sysWaveBars = placeholderBars
 
   // Compute playhead position as percentage of duration
-  const durationSec = (project?.duration_ms || 0) / 1000
+  // Prefer the video element's reported duration (works even for webm without headers)
+  const durationSec = videoDuration || (project?.duration_ms || 0) / 1000
   const originalDur = durationSec
   const playPercent = durationSec > 0 ? (currentTime / durationSec) * 100 : 0
 
@@ -1341,7 +1344,31 @@ export default function Editor() {
               <video
                 ref={videoRef}
                 className={styles.videoPlayer}
+                preload="auto"
                 src={`/api/projects/${project.id}/media/source${project.media_path?.match(/\.\w+$/)?.[0] || '.mp4'}`}
+                onLoadedMetadata={() => {
+                  const v = videoRef.current
+                  if (!v) return
+                  if (v.duration && isFinite(v.duration)) {
+                    setVideoDuration(v.duration)
+                  } else if (v.duration === Infinity) {
+                    // Chrome-recorded webm: seek to huge time to force browser to find real end
+                    v.currentTime = 1e10
+                  }
+                }}
+                onDurationChange={() => {
+                  const v = videoRef.current
+                  if (v && v.duration && isFinite(v.duration)) setVideoDuration(v.duration)
+                }}
+                onSeeked={() => {
+                  const v = videoRef.current
+                  if (!v) return
+                  // After the Infinity-duration seek trick, the browser now knows the real end
+                  if (videoDuration === 0 && v.currentTime > 0) {
+                    setVideoDuration(v.currentTime)
+                    v.currentTime = 0 // reset to start
+                  }
+                }}
                 onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
@@ -1616,53 +1643,72 @@ export default function Editor() {
                 const time = pct * durationSec
                 seekTo(Math.max(0, Math.min(durationSec, time)))
               }}>
-                <div className={`${styles.trackClip} ${clipStyle}`} style={{ left: 0, right: '3%' }}>
+                <div className={`${styles.trackClip} ${clipStyle}`} style={{ left: 0, width: '100%' }}>
                   {isAudio ? (
-                    <div className={styles.trackAudioStack}>
-                      <div className={styles.trackWaveSection}>
-                        {waveformData ? (
-                          <div className={styles.waveBars}>
-                            {(() => {
-                              const targetBars = 300
-                              const step = Math.max(1, Math.floor(waveformData.length / targetBars))
-                              const bars: number[] = []
-                              for (let i = 0; i < waveformData.length; i += step) {
-                                const chunk = waveformData.slice(i, i + step)
-                                const max = Math.max(...chunk)
-                                bars.push(max)
-                              }
-                              return bars.map((amp, i) => (
-                                <div key={i} className={styles.wb} style={{ height: `${Math.max(2, amp * 100)}%`, background: color, opacity: 0.5 }} />
-                              ))
-                            })()}
-                          </div>
-                        ) : (
-                          <div className={styles.waveBars}>
-                            {Array.from({ length: 200 }, (_, i) => (
-                              <div key={i} className={styles.wb} style={{ height: `${15 + Math.random() * 70}%`, background: color, opacity: 0.3 }} />
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                    <div className={styles.trackAudioLayer}>
+                      {/* Waveform — fills full track height */}
+                      {waveformData && durationSec > 0 ? (
+                        <div className={styles.waveBarsAbsolute}>
+                          {(() => {
+                            const samplesPerSec = 100
+                            const targetBars = 400
+                            const step = Math.max(1, Math.floor(waveformData.length / targetBars))
+                            // Find peak amplitude to normalize — loudest bar fills 95% of track height
+                            const peakAmp = Math.max(...waveformData) || 1
+                            const bars: { amp: number; leftPct: number; widthPct: number }[] = []
+                            for (let i = 0; i < waveformData.length; i += step) {
+                              const chunk = waveformData.slice(i, i + step)
+                              const max = Math.max(...chunk)
+                              const timeSec = i / samplesPerSec
+                              const endTimeSec = Math.min((i + step) / samplesPerSec, durationSec)
+                              bars.push({
+                                amp: max / peakAmp,
+                                leftPct: (timeSec / durationSec) * 100,
+                                widthPct: Math.max(0.15, ((endTimeSec - timeSec) / durationSec) * 100),
+                              })
+                            }
+                            return bars.map((bar, i) => (
+                              <div key={i} className={styles.wbAbs} style={{
+                                left: `${bar.leftPct}%`,
+                                width: `${bar.widthPct}%`,
+                                height: `${Math.max(2, bar.amp * 95)}%`,
+                                background: color,
+                                opacity: 0.5,
+                              }} />
+                            ))
+                          })()}
+                        </div>
+                      ) : (
+                        <div className={styles.waveBarsAbsolute}>
+                          {placeholderBars.map((h, i) => (
+                            <div key={i} className={styles.wbAbs} style={{
+                              left: `${(i / 200) * 100}%`,
+                              width: '0.5%',
+                              height: `${h}%`,
+                              background: color,
+                              opacity: 0.3,
+                            }} />
+                          ))}
+                        </div>
+                      )}
+                      {/* Transcript words — overlaid on waveform */}
                       {transcript && durationSec > 0 && (
-                        <div className={styles.trackWordsSection}>
-                          <div className={styles.trackWords}>
-                            {transcript.words.map((word, wi) => {
-                              const left = (word.start / durationSec) * 100
-                              const width = Math.max(0.2, ((word.end - word.start) / durationSec) * 100)
-                              const isCutWord = editor.isCut(word.start * 1000, word.end * 1000)
-                              return (
-                                <span
-                                  key={wi}
-                                  className={`${styles.trackWord} ${word.filler ? styles.trackWordFiller : ''} ${isCutWord ? styles.trackWordCut : ''}`}
-                                  style={{ left: `${left}%`, width: `${width}%` }}
-                                  title={word.word}
-                                >
-                                  {width > 1 ? word.word : ''}
-                                </span>
-                              )
-                            })}
-                          </div>
+                        <div className={styles.trackWordsOverlay}>
+                          {transcript.words.map((word, wi) => {
+                            const left = (word.start / durationSec) * 100
+                            const width = Math.max(0.2, ((word.end - word.start) / durationSec) * 100)
+                            const isCutWord = editor.isCut(word.start * 1000, word.end * 1000)
+                            return (
+                              <span
+                                key={wi}
+                                className={`${styles.trackWord} ${word.filler ? styles.trackWordFiller : ''} ${isCutWord ? styles.trackWordCut : ''}`}
+                                style={{ left: `${left}%`, width: `${width}%` }}
+                                title={word.word}
+                              >
+                                {width > 1 ? word.word : ''}
+                              </span>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

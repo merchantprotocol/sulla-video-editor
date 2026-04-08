@@ -298,8 +298,8 @@
 
 /* Track rows */
 .trackRows { flex: 1; overflow-y: auto; flex-shrink: 0; }
-.trackRow { display: flex; align-items: center; height: 38px; border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
-.trackRowWithTranscript { height: 56px; }
+.trackRow { display: flex; align-items: stretch; height: 64px; border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
+.trackRowWithTranscript { height: 64px; }
 .trackRow:hover { background: rgba(0,0,0,0.015); }
 .trackRowSelected { background: var(--accent-soft); }
 .trackRowMuted { opacity: 0.35; }
@@ -316,25 +316,29 @@
 
 .trackContent { flex: 1; height: 100%; position: relative; overflow: hidden; }
 .trackClip { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; display: flex; align-items: center; overflow: hidden; }
-.trackAudioStack { display: flex; flex-direction: column; width: 100%; height: 100%; }
-.trackWaveSection { flex: 1; min-height: 0; overflow: hidden; }
-.trackWordsSection { height: 18px; flex-shrink: 0; overflow: hidden; border-top: 1px solid var(--border); }
+.trackAudioLayer { position: relative; width: 100%; height: 100%; }
+.trackWordsOverlay { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.trackWordsOverlay .trackWord { pointer-events: auto; }
 .videoClip { background: rgba(58,127,158,0.12); border: 1px solid rgba(58,127,158,0.25); }
 .cameraClip { background: rgba(120,90,220,0.1); border: 1px solid rgba(120,90,220,0.25); }
 .micClip { background: rgba(26,127,55,0.1); border: 1px solid rgba(26,127,55,0.25); }
 .sysClip { background: rgba(154,103,0,0.1); border: 1px solid rgba(154,103,0,0.2); }
 .clipLabel { font-size: 8px; color: var(--text-muted); padding: 0 6px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
 
-/* Waveform bars */
-.waveBars { display: flex; align-items: center; gap: 1px; height: 100%; padding: 5px 4px; }
+/* Waveform bars — time-aligned absolute positioning */
+.waveBarsAbsolute { position: relative; width: 100%; height: 100%; }
+.wbAbs { position: absolute; top: 50%; transform: translateY(-50%); border-radius: 1px; min-height: 2px; }
+
+/* Waveform bars — legacy flex layout */
+.waveBars { display: flex; align-items: center; gap: 1px; height: 100%; padding: 2px 4px; }
 
 /* Transcript words on audio track (Descript-style) */
 .trackWords { position: relative; width: 100%; height: 100%; overflow: hidden; }
-.trackWord { position: absolute; top: 1px; bottom: 1px; background: rgba(26,127,55,0.15); border-radius: 2px; font-size: 7px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 1px; border-left: 1px solid rgba(26,127,55,0.25); transition: opacity 0.12s; cursor: default; }
-.trackWord:hover { background: rgba(26,127,55,0.25); color: var(--text-secondary); z-index: 2; }
-.trackWordFiller { background: rgba(207,34,46,0.1); border-left-color: rgba(207,34,46,0.3); color: var(--red); opacity: 0.6; }
-.trackWordCut { opacity: 0.1; background: transparent; text-decoration: line-through; }
-.wb { width: 2px; border-radius: 1px; flex-shrink: 0; }
+.trackWord { position: absolute; bottom: 0; height: 12px; background: none; border-radius: 0; font-size: 7px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 1px; border-left: 1px solid rgba(26,127,55,0.2); transition: opacity 0.12s; cursor: default; }
+.trackWord:hover { background: rgba(26,127,55,0.1); color: var(--text-secondary); z-index: 2; }
+.trackWordFiller { border-left-color: rgba(207,34,46,0.4); color: var(--red); opacity: 0.6; }
+.trackWordCut { opacity: 0.1; border-left-color: transparent; text-decoration: line-through; }
+.wb { width: 3px; border-radius: 1px; flex-shrink: 0; min-height: 2px; }
 
 /* Cut regions on tracks */
 .trackCut { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(207,34,46,0.06) 2px, rgba(207,34,46,0.06) 4px); border-left: 1px dashed rgba(207,34,46,0.3); border-right: 1px dashed rgba(207,34,46,0.3); }

@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
-const os = require('os');
+const { capturesDir } = require('../utils/config');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,8 +9,6 @@ const router = express.Router();
 // GET /api/captures — list all capture sessions
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const capturesDir = path.join(os.homedir(), 'sulla', 'captures');
-
     let entries;
     try {
       entries = await fs.readdir(capturesDir, { withFileTypes: true });
@@ -86,7 +84,7 @@ router.get('/:id/media/:filename', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
 
-    const filePath = path.join(os.homedir(), 'sulla', 'captures', id, filename);
+    const filePath = path.join(capturesDir, id, filename);
 
     // Check file exists
     try {

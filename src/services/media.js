@@ -35,7 +35,25 @@ async function extractMetadata(filePath) {
   const audioStream = probe.streams?.find(s => s.codec_type === 'audio');
   const format = probe.format || {};
 
-  const durationSec = parseFloat(format.duration || videoStream?.duration || 0);
+  let durationSec = parseFloat(format.duration || videoStream?.duration || 0);
+
+  // Chrome-recorded webm files often lack a duration header.
+  // Fall back to reading the last packet timestamp.
+  if (!durationSec) {
+    try {
+      const { stdout: ptsOut } = await exec('ffprobe', [
+        '-v', 'error',
+        '-select_streams', videoStream ? 'v:0' : 'a:0',
+        '-show_entries', 'packet=pts_time',
+        '-of', 'csv=p=0',
+        filePath,
+      ]);
+      const lines = ptsOut.trim().split('\n').filter(Boolean);
+      const lastPts = parseFloat(lines[lines.length - 1]);
+      if (lastPts > 0) durationSec = lastPts;
+    } catch { /* ignore — duration stays 0 */ }
+  }
+
   const width = videoStream?.width || 0;
   const height = videoStream?.height || 0;
 

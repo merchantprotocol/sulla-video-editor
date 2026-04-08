@@ -60,15 +60,17 @@ const ProjectController = {
       const stream = ProjectService.transcribeStream(req.params.id, req.userId);
       const project = await stream.projectLookup;
 
-      // Set up SSE
+      // start() validates project & audio file — call before writing headers
+      // so validation errors return proper JSON responses, not broken SSE
+      const emitter = stream.start(project);
+
+      // Set up SSE only after validation passes
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no', // disable nginx buffering
       });
-
-      const emitter = stream.start(project);
 
       emitter.on('progress', (pct) => {
         res.write(`data: ${JSON.stringify({ type: 'progress', progress: pct })}\n\n`);

@@ -6,6 +6,10 @@ const UploadController = require('../controllers/upload.controller');
 
 const router = express.Router();
 
+// Media serving — no auth required (video/img tags can't send Authorization headers)
+router.get('/:id/media/thumbnails/:filename', ProjectController.serveThumbnail);
+router.get('/:id/media/:filename', ProjectController.serveMedia);
+
 router.use(requireAuth);
 
 router.get('/', ProjectController.list);
@@ -37,8 +41,5 @@ router.post('/:id/upload/init', UploadController.init);
 router.post('/:id/upload/chunk', UploadController.chunk);
 router.get('/:id/upload/status', UploadController.status);
 router.post('/:id/upload/complete', UploadController.complete);
-
-router.get('/:id/media/:filename', ProjectController.serveMedia);
-router.get('/:id/media/thumbnails/:filename', ProjectController.serveThumbnail);
 
 module.exports = router;

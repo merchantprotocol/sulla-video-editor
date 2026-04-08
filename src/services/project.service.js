@@ -52,6 +52,21 @@ const ProjectService = {
       }
     }
 
+    // Self-heal: if duration is missing but media exists, extract it now
+    if (!project.duration_ms && project.media_path && existsSync(project.media_path)) {
+      try {
+        log.info('Duration missing — re-extracting from media', { projectId });
+        const metadata = await MediaService.extractMetadata(project.media_path);
+        if (metadata.duration_ms > 0) {
+          await ProjectRepository.update(projectId, { duration_ms: metadata.duration_ms });
+          project.duration_ms = metadata.duration_ms;
+          log.info('Duration repaired', { projectId, duration_ms: metadata.duration_ms });
+        }
+      } catch (err) {
+        log.warn('Duration extraction failed', { projectId, error: err.message });
+      }
+    }
+
     const hasWaveform = existsSync(projectPath(project.id, 'data', 'waveform.json'));
 
     return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks: hasTracks || tracks.length > 0, hasWaveform }, tracks };
@@ -180,6 +195,30 @@ const ProjectService = {
     // Process media (metadata, audio extraction, thumbnails, waveform)
     const metadata = await this._processMedia(projectId, sourcePath, start);
 
+    // If source had no audio, check for sibling audio files in the capture directory
+    // (captures store mic/system-audio as separate files alongside the video)
+    const audioPath = projectPath(projectId, 'media', 'audio.wav');
+    if (!existsSync(audioPath)) {
+      const captureDir = path.dirname(filePath);
+      // Prefer mic over system-audio (mic is the speaker's voice)
+      const candidates = ['mic-mic.webm', 'mic.webm', 'system-audio.wav', 'system-audio.webm'];
+      for (const candidate of candidates) {
+        const candidatePath = path.join(captureDir, candidate);
+        if (existsSync(candidatePath)) {
+          log.info('Found sibling audio file in capture', { projectId, audioFile: candidate });
+          await MediaService.extractAudio(candidatePath, audioPath);
+          // Generate waveform from the newly extracted audio
+          try {
+            const waveResult = await MediaService.extractWaveform(audioPath, projectPath(projectId, 'data', 'waveform.json'), 100);
+            log.info('Waveform extracted from sibling audio', { projectId, samples: waveResult.sample_count });
+          } catch (err) {
+            log.warn('Waveform extraction failed (non-fatal)', { projectId, error: err.message });
+          }
+          break;
+        }
+      }
+    }
+
     // Apply track roles if provided
     if (trackRoles && typeof trackRoles === 'object') {
       const tracksPath = projectPath(projectId, 'data', 'tracks.json');
@@ -230,11 +269,13 @@ const ProjectService = {
       JSON.stringify(metadata.tracks, null, 2)
     );
 
-    log.info('Extracting audio', { projectId });
     const audioPath = projectPath(projectId, 'media', 'audio.wav');
     // Only extract if not already done (ingest with speaker role may have already extracted)
-    if (!existsSync(audioPath)) {
+    if (!existsSync(audioPath) && metadata.has_audio) {
+      log.info('Extracting audio', { projectId });
       await MediaService.extractAudio(sourcePath, audioPath);
+    } else if (!metadata.has_audio) {
+      log.info('Source has no audio streams, skipping audio extraction', { projectId });
     }
 
     log.info('Generating thumbnails', { projectId });
@@ -481,7 +522,10 @@ const ProjectService = {
   },
 
   async getMediaPath(projectId, userId, filename) {
-    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    // userId may be null for unauthenticated media requests (video/img tags)
+    const project = userId
+      ? await ProjectRepository.findByIdAndUser(projectId, userId)
+      : await ProjectRepository.findById(projectId);
     if (!project) throw new NotFoundError('Project not found');
 
     const filePath = projectPath(projectId, 'media', filename);
@@ -491,7 +535,9 @@ const ProjectService = {
   },
 
   async getThumbnailPath(projectId, userId, filename) {
-    const project = await ProjectRepository.findByIdAndUser(projectId, userId);
+    const project = userId
+      ? await ProjectRepository.findByIdAndUser(projectId, userId)
+      : await ProjectRepository.findById(projectId);
     if (!project) throw new NotFoundError('Project not found');
 
     const filePath = projectPath(projectId, 'media', 'thumbnails', filename);

@@ -8,11 +8,13 @@ services:
     volumes:
       - "./:/var/www/html:rw"
       - "appdata:/data"
+      - "${CAPTURES_DIR:-~/sulla/captures}:/data/captures:ro"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
       - WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
       - DATA_DIR=/data
+      - CAPTURES_DIR=/data/captures
       - INBOX_DIR=/data/inbox
       - SULLA_API_KEY=${SULLA_API_KEY:-}
       - SULLA_CHAT_URL=${SULLA_CHAT_URL:-}
