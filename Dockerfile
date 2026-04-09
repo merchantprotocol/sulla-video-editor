@@ -17,15 +17,15 @@ RUN git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp \
     && cp build/ggml/src/libggml*.so* /usr/local/lib/ \
     && ldconfig
 
-# Download the base English model
+# Download the large-v3-turbo model (best accuracy, optimized speed)
 RUN cd /opt/whisper.cpp \
-    && bash models/download-ggml-model.sh base.en
+    && bash models/download-ggml-model.sh large-v3-turbo
 
 RUN mkdir -p /opt/whisper-models \
-    && cp /opt/whisper.cpp/models/ggml-base.en.bin /opt/whisper-models/ \
+    && cp /opt/whisper.cpp/models/ggml-large-v3-turbo.bin /opt/whisper-models/ \
     && rm -rf /opt/whisper.cpp/build
 
-ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
+ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-large-v3-turbo.bin
 
 # Install Chromium for headless rendering
 # Ubuntu 24.04 replaced chromium with a snap stub, so we install from

@@ -12,10 +12,11 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
-      - WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
+      - WHISPER_MODEL_PATH=/opt/whisper-models/ggml-large-v3-turbo.bin
       - DATA_DIR=/data
       - CAPTURES_DIR=/data/captures
       - INBOX_DIR=/data/inbox
+      - ALIGNER_URL=http://aligner:8765
       - SULLA_API_KEY=${SULLA_API_KEY:-}
       - SULLA_CHAT_URL=${SULLA_CHAT_URL:-}
       - SULLA_BEARER_TOKEN=${SULLA_BEARER_TOKEN:-}
@@ -27,6 +28,16 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  aligner:
+    build: ./aligner
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   db:
     image: postgres:16-alpine

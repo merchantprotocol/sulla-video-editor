@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { EventEmitter } = require('events');
 const log = require('../utils/logger').create('transcribe');
+const Aligner = require('./aligner');
 
 const exec = promisify(execFile);
 
@@ -15,39 +16,35 @@ const WHISPER_MODEL = process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggm
 // DTW aligns the audio spectrogram to token boundaries, reducing drift
 // from ~100-200ms to ~20-50ms. Requires a tdrz or tiny-diarize model for
 // best results, but improves any model.
-const WHISPER_DTW = process.env.WHISPER_DTW || 'tiny.en';
+const WHISPER_DTW = process.env.WHISPER_DTW || 'large.v3.turbo';
 
 /**
- * Run whisper.cpp on an audio file and return structured transcript
+ * Run whisper.cpp on an audio file and return structured transcript.
+ * Uses SRT output with -ml 1 for word-level segments, plus DTW with
+ * flash attention disabled (DTW requires standard attention).
  */
 async function transcribe(audioPath) {
   const outputBase = audioPath.replace(/\.\w+$/, '');
 
-  // Run whisper.cpp with JSON output, word-level timestamps, and DTW alignment
   const args = [
     '-m', WHISPER_MODEL,
     '-f', audioPath,
-    '-oj',                   // output JSON
-    '-ml', '1',              // max segment length (word-level)
+    '-osrt',                 // SRT output (has word-level segments with -ml 1)
+    '-ml', '1',              // max 1 char per segment = word-level output
     '-pp',                   // print progress
     '--dtw', WHISPER_DTW,    // Dynamic Time Warping for precise token alignment
-    '-of', outputBase,       // output file base name
+    '--no-flash-attn',       // DTW is incompatible with flash attention
+    '-of', outputBase,
   ];
 
   await exec(WHISPER_CLI, args, {
-    timeout: 600000, // 10 min timeout for long files
+    timeout: 600000,
   });
 
-  // Read whisper's JSON output
-  const jsonPath = `${outputBase}.json`;
-  const raw = await fs.readFile(jsonPath, 'utf-8');
-  const whisperOutput = JSON.parse(raw);
-
-  // Transform whisper output to our format
-  const transcript = transformWhisperOutput(whisperOutput);
-
-  // Clean up whisper's output file
-  await fs.unlink(jsonPath).catch(() => {});
+  const srtPath = `${outputBase}.srt`;
+  const raw = await fs.readFile(srtPath, 'utf-8');
+  const transcript = parseSrtToTranscript(raw);
+  await fs.unlink(srtPath).catch(() => {});
 
   return transcript;
 }
@@ -63,10 +60,11 @@ function transcribeWithProgress(audioPath) {
   const proc = spawn(WHISPER_CLI, [
     '-m', WHISPER_MODEL,
     '-f', audioPath,
-    '-oj',
+    '-osrt',                 // SRT for word-level segments
     '-ml', '1',
     '-pp',
     '--dtw', WHISPER_DTW,
+    '--no-flash-attn',       // DTW requires standard attention
     '-of', outputBase,
   ], { timeout: 600000 });
 
@@ -90,11 +88,10 @@ function transcribeWithProgress(audioPath) {
     }
 
     try {
-      const jsonPath = `${outputBase}.json`;
-      const raw = await fs.readFile(jsonPath, 'utf-8');
-      const whisperOutput = JSON.parse(raw);
-      const transcript = transformWhisperOutput(whisperOutput);
-      await fs.unlink(jsonPath).catch(() => {});
+      const srtPath = `${outputBase}.srt`;
+      const raw = await fs.readFile(srtPath, 'utf-8');
+      const transcript = parseSrtToTranscript(raw);
+      await fs.unlink(srtPath).catch(() => {});
       emitter.emit('done', transcript);
     } catch (err) {
       emitter.emit('error', err);
@@ -109,7 +106,79 @@ function transcribeWithProgress(audioPath) {
 }
 
 /**
- * Transform whisper.cpp JSON into our transcript format
+ * Parse SRT timestamp "HH:MM:SS,mmm" to seconds
+ */
+function parseSrtTime(str) {
+  const [time, ms] = str.split(',');
+  const [h, m, s] = time.split(':').map(Number);
+  return h * 3600 + m * 60 + s + parseInt(ms) / 1000;
+}
+
+/**
+ * Parse whisper SRT output (word-level with -ml 1) into our transcript format.
+ * Each SRT entry is a single word with precise DTW timestamps.
+ */
+function parseSrtToTranscript(srtText) {
+  const fillerWords = new Set(['um', 'uh', 'like', 'basically', 'actually', 'literally', 'right', 'okay', 'so', 'well', 'you know', 'i mean']);
+  const words = [];
+
+  // Parse SRT entries: "1\n00:00:00,790 --> 00:00:01,990\n okay\n"
+  const blocks = srtText.trim().split(/\n\n+/);
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 2) continue;
+
+    // Line 0: sequence number, Line 1: timestamps, Line 2+: text
+    const tsLine = lines.find(l => l.includes('-->'));
+    if (!tsLine) continue;
+    const [startStr, endStr] = tsLine.split('-->').map(s => s.trim());
+    const text = lines.slice(lines.indexOf(tsLine) + 1).join(' ').trim();
+    if (!text) continue;
+
+    const start = parseSrtTime(startStr);
+    const end = parseSrtTime(endStr);
+
+    const entry = {
+      word: text,
+      start,
+      end,
+      confidence: 0.95,
+      speaker: 's1',
+    };
+
+    if (fillerWords.has(text.toLowerCase().replace(/[.,!?]/g, ''))) {
+      entry.filler = true;
+    }
+
+    words.push(entry);
+  }
+
+  // Detect silence gaps
+  const silences = [];
+  for (let i = 1; i < words.length; i++) {
+    const gap = words[i].start - words[i - 1].end;
+    if (gap > 1.5) {
+      silences.push({
+        start: words[i - 1].end,
+        end: words[i].start,
+        duration: gap,
+        after_word_index: i - 1,
+      });
+    }
+  }
+
+  const lastWord = words[words.length - 1];
+  return {
+    speakers: [{ id: 's1', name: 'Speaker 1', color: '#3a7f9e' }],
+    words,
+    silences,
+    duration_ms: lastWord ? Math.round(lastWord.end * 1000) : 0,
+    word_count: words.length,
+  };
+}
+
+/**
+ * Transform whisper.cpp JSON into our transcript format (legacy fallback)
  */
 function transformWhisperOutput(whisperOutput) {
   const words = [];
@@ -245,22 +314,21 @@ async function realignWords(audioPath, words, startIdx, endIdx) {
     const args = [
       '-m', WHISPER_MODEL,
       '-f', tmpFile,
-      '-oj',
+      '-osrt',
       '-ml', '1',
       '--dtw', WHISPER_DTW,
+      '--no-flash-attn',
       '-of', outputBase,
     ];
 
     await exec(WHISPER_CLI, args, { timeout: 120000 });
 
-    // Parse whisper output
-    const jsonPath = `${outputBase}.json`;
-    const raw = await fs.readFile(jsonPath, 'utf-8');
-    const whisperOutput = JSON.parse(raw);
-    const segTranscript = transformWhisperOutput(whisperOutput);
+    // Parse whisper SRT output
+    const srtPath = `${outputBase}.srt`;
+    const raw = await fs.readFile(srtPath, 'utf-8');
+    const segTranscript = parseSrtToTranscript(raw);
 
-    // Clean up whisper output file
-    await fs.unlink(jsonPath).catch(() => {});
+    await fs.unlink(srtPath).catch(() => {});
 
     const newWords = segTranscript.words;
 
@@ -306,4 +374,113 @@ async function realignWords(audioPath, words, startIdx, endIdx) {
   }
 }
 
-module.exports = { transcribe, transcribeWithProgress, transformWhisperOutput, realignWords };
+/**
+ * Refine a whisper transcript with forced alignment.
+ * Whisper provides the TEXT, the aligner provides the TIMESTAMPS.
+ *
+ * @param {string} audioPath - Path to the audio WAV file
+ * @param {object} transcript - Whisper transcript in our format
+ * @returns {object} Transcript with refined timestamps from forced alignment
+ */
+async function refineWithAlignment(audioPath, transcript) {
+  if (!await Aligner.isAvailable()) {
+    log.warn('Forced alignment service unavailable — using whisper timestamps');
+    return transcript;
+  }
+
+  // Build plain text from whisper words (the aligner needs raw text)
+  const plainText = transcript.words.map(w => w.word).join(' ');
+
+  try {
+    const alignedWords = await Aligner.align(audioPath, plainText);
+
+    if (!alignedWords || alignedWords.length === 0) {
+      log.warn('Aligner returned no words — keeping whisper timestamps');
+      return transcript;
+    }
+
+    // Match aligned words back to whisper words.
+    // The aligner returns uppercase words; whisper has original casing + punctuation.
+    // Match by position since both are in the same order.
+    let alignIdx = 0;
+    for (let i = 0; i < transcript.words.length; i++) {
+      const whisperWord = transcript.words[i];
+      const cleanWhisper = whisperWord.word.replace(/[.,!?;:'"()\u2026]/g, '').toUpperCase().trim();
+
+      // Skip punctuation-only tokens (aligner doesn't produce these)
+      if (!cleanWhisper) continue;
+
+      if (alignIdx < alignedWords.length) {
+        const aligned = alignedWords[alignIdx];
+
+        // Verify words match (case-insensitive, ignoring punctuation)
+        if (aligned.word === cleanWhisper) {
+          whisperWord.start = aligned.start;
+          whisperWord.end = aligned.end;
+          whisperWord.confidence = Math.min(1, Math.max(0, (aligned.score + 10) / 10)); // normalize log-prob to 0-1
+          alignIdx++;
+        } else {
+          // Mismatch — try to skip ahead in aligned words to find match
+          let found = false;
+          for (let j = alignIdx + 1; j < Math.min(alignIdx + 3, alignedWords.length); j++) {
+            if (alignedWords[j].word === cleanWhisper) {
+              whisperWord.start = alignedWords[j].start;
+              whisperWord.end = alignedWords[j].end;
+              alignIdx = j + 1;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            log.warn('Alignment word mismatch', { expected: cleanWhisper, got: aligned.word, idx: i });
+            alignIdx++;
+          }
+        }
+      }
+    }
+
+    // Assign timestamps to punctuation tokens based on adjacent words
+    for (let i = 0; i < transcript.words.length; i++) {
+      const w = transcript.words[i];
+      const clean = w.word.replace(/[.,!?;:'"()\u2026]/g, '').trim();
+      if (clean) continue; // not punctuation-only
+
+      // Punctuation inherits end time of previous word and start time of next word
+      const prev = i > 0 ? transcript.words[i - 1] : null;
+      const next = i < transcript.words.length - 1 ? transcript.words[i + 1] : null;
+      if (prev) w.start = prev.end;
+      if (next) w.end = next.start;
+      else if (prev) w.end = prev.end + 0.05;
+    }
+
+    // Recalculate silences with new timestamps
+    transcript.silences = [];
+    for (let i = 1; i < transcript.words.length; i++) {
+      const gap = transcript.words[i].start - transcript.words[i - 1].end;
+      if (gap > 1.5) {
+        transcript.silences.push({
+          start: transcript.words[i - 1].end,
+          end: transcript.words[i].start,
+          duration: gap,
+          after_word_index: i - 1,
+        });
+      }
+    }
+
+    const lastWord = transcript.words[transcript.words.length - 1];
+    transcript.duration_ms = lastWord ? Math.round(lastWord.end * 1000) : transcript.duration_ms;
+
+    log.info('Forced alignment applied', {
+      alignedWords: alignedWords.length,
+      transcriptWords: transcript.words.length,
+      matched: alignIdx,
+    });
+
+    return transcript;
+  } catch (err) {
+    log.error('Forced alignment failed — keeping whisper timestamps', { error: err.message });
+    return transcript;
+  }
+}
+
+module.exports = { transcribe, transcribeWithProgress, parseSrtToTranscript, transformWhisperOutput, realignWords, refineWithAlignment };

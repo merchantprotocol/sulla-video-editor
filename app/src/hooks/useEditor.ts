@@ -12,11 +12,10 @@ export interface Edl {
   cuts: EdlCut[]
 }
 
-// Padding added before/after each cut to compensate for whisper timestamp drift.
-// Whisper base.en timestamps can be off by 50-200ms; 80ms covers most drift
-// without eating into adjacent words.
-const CUT_PAD_BEFORE_MS = 80
-const CUT_PAD_AFTER_MS = 60
+// Max search window when snapping cuts to silence in waveform (ms)
+const SNAP_WINDOW_MS = 150
+// Amplitude threshold below which audio is considered silence (0-1 normalized)
+const SILENCE_THRESHOLD = 0.08
 
 interface UndoEntry {
   edl: Edl
@@ -24,13 +23,68 @@ interface UndoEntry {
 }
 
 /**
- * Pad a cut range to compensate for whisper timestamp inaccuracy,
- * then clamp to zero.
+ * Snap a cut edge to the nearest silence boundary in the waveform.
+ * Searches within SNAP_WINDOW_MS around the timestamp for the quietest point.
+ * Falls back to a small fixed pad if no waveform data is available.
  */
-function padCut(startMs: number, endMs: number): { start_ms: number; end_ms: number } {
+function snapToSilence(
+  timeMs: number,
+  direction: 'before' | 'after',
+  waveform: number[] | null,
+  durationSec: number,
+): number {
+  if (!waveform || !waveform.length || durationSec <= 0) {
+    // No waveform — use small fixed padding as fallback
+    return direction === 'before'
+      ? Math.max(0, timeMs - 50)
+      : timeMs + 50
+  }
+
+  const samplesPerSec = 100
+  const totalSamples = waveform.length
+  const msPerSample = (durationSec * 1000) / totalSamples
+  const centerSample = Math.round(timeMs / msPerSample)
+
+  const windowSamples = Math.round(SNAP_WINDOW_MS / msPerSample)
+  const searchStart = Math.max(0, centerSample - windowSamples)
+  const searchEnd = Math.min(totalSamples - 1, centerSample + windowSamples)
+
+  // Find the quietest sample in the search window
+  let bestSample = centerSample
+  let bestAmp = Infinity
+
+  for (let i = searchStart; i <= searchEnd; i++) {
+    const amp = waveform[i]
+    if (amp < bestAmp) {
+      bestAmp = amp
+      bestSample = i
+    }
+  }
+
+  // If the quietest point is below silence threshold, snap to it.
+  // Otherwise, bias slightly in the cut direction to avoid clipping speech.
+  if (bestAmp < SILENCE_THRESHOLD) {
+    return Math.max(0, bestSample * msPerSample)
+  }
+
+  // No silence found — use minimal padding in the safe direction
+  return direction === 'before'
+    ? Math.max(0, timeMs - 30)
+    : timeMs + 30
+}
+
+/**
+ * Create a snapped cut range using waveform silence detection.
+ */
+function snapCut(
+  startMs: number,
+  endMs: number,
+  waveform: number[] | null,
+  durationSec: number,
+): { start_ms: number; end_ms: number } {
   return {
-    start_ms: Math.max(0, startMs - CUT_PAD_BEFORE_MS),
-    end_ms: endMs + CUT_PAD_AFTER_MS,
+    start_ms: snapToSilence(startMs, 'before', waveform, durationSec),
+    end_ms: snapToSilence(endMs, 'after', waveform, durationSec),
   }
 }
 
@@ -58,10 +112,18 @@ function mergeCuts(cuts: EdlCut[]): EdlCut[] {
 
 export function useEditor(initialEdl?: Edl) {
   const [edl, setEdl] = useState<Edl>(initialEdl || { version: 1, cuts: [] })
+  const waveformRef = useRef<number[] | null>(null)
+  const durationRef = useRef(0)
   const undoStack = useRef<UndoEntry[]>([])
   const redoStack = useRef<UndoEntry[]>([])
   const [undoCount, setUndoCount] = useState(0) // force re-renders on undo/redo
   const [lastAction, setLastAction] = useState<string | null>(null)
+
+  // Call this when waveform data and duration become available
+  function setWaveformContext(waveform: number[] | null, durationSec: number) {
+    waveformRef.current = waveform
+    durationRef.current = durationSec
+  }
 
   const pushUndo = useCallback((desc: string, newEdl: Edl) => {
     undoStack.current.push({ edl: structuredClone(edl), desc })
@@ -96,32 +158,53 @@ export function useEditor(initialEdl?: Edl) {
     return edl.cuts.some(c => c.start_ms <= startMs && c.end_ms >= endMs)
   }
 
-  // Add a cut with padding for timestamp accuracy
+  // Add a cut with waveform-snapped edges for accurate boundaries
   function addCut(startMs: number, endMs: number, reason: string) {
-    // Don't add duplicate cuts
     if (isCut(startMs, endMs)) return
-    const padded = padCut(startMs, endMs)
-    const newCuts = mergeCuts([...edl.cuts, { type: 'remove' as const, ...padded, reason }])
+    const snapped = snapCut(startMs, endMs, waveformRef.current, durationRef.current)
+    const newCuts = mergeCuts([...edl.cuts, { type: 'remove' as const, ...snapped, reason }])
     pushUndo(reason, { ...edl, cuts: newCuts })
   }
 
-  // Remove cuts in a range (restore)
+  // Remove cuts that overlap a range (restore)
+  // Uses overlap check (not containment) so padded cuts can be restored
+  // by clicking the original unpadded word/silence range.
   function removeCutsInRange(startMs: number, endMs: number) {
     const newEdl = {
       ...edl,
-      cuts: edl.cuts.filter(c => !(c.start_ms >= startMs && c.end_ms <= endMs)),
+      cuts: edl.cuts.filter(c => !(c.start_ms < endMs && c.end_ms > startMs)),
     }
     pushUndo('Restore cut region', newEdl)
   }
 
-  // Bulk: remove all fillers with padding for timestamp accuracy
-  function removeAllFillers(words: { start: number; end: number; filler?: boolean }[]) {
-    const fillerCuts: EdlCut[] = words
-      .filter(w => w.filler && !isCut(w.start * 1000, w.end * 1000))
-      .map(w => {
-        const padded = padCut(Math.round(w.start * 1000), Math.round(w.end * 1000))
-        return { type: 'remove' as const, ...padded, reason: 'filler' }
-      })
+  // Bulk: remove all fillers with padding for timestamp accuracy.
+  // Also absorbs adjacent punctuation-only words (Whisper emits ".", "," etc. as separate tokens).
+  function removeAllFillers(words: { word: string; start: number; end: number; filler?: boolean }[]) {
+    const isPunct = (w: { word: string }) => /^[.,!?;:\u2026]+$/.test(w.word.trim())
+    const fillerCuts: EdlCut[] = []
+
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]
+      if (!w.filler || isCut(w.start * 1000, w.end * 1000)) continue
+
+      let startMs = Math.round(w.start * 1000)
+      let endMs = Math.round(w.end * 1000)
+
+      // Absorb punctuation immediately after the filler
+      while (i + 1 < words.length && isPunct(words[i + 1]) && !isCut(words[i + 1].start * 1000, words[i + 1].end * 1000)) {
+        i++
+        endMs = Math.round(words[i].end * 1000)
+      }
+      // Absorb punctuation immediately before the filler
+      const firstIdx = fillerCuts.length === 0 ? 0 : i
+      const prevIdx = words.findIndex(ww => ww === w) - 1
+      if (prevIdx >= 0 && isPunct(words[prevIdx]) && !isCut(words[prevIdx].start * 1000, words[prevIdx].end * 1000)) {
+        startMs = Math.round(words[prevIdx].start * 1000)
+      }
+
+      const snapped = snapCut(startMs, endMs, waveformRef.current, durationRef.current)
+      fillerCuts.push({ type: 'remove' as const, ...snapped, reason: 'filler' })
+    }
 
     if (fillerCuts.length === 0) return 0
 
@@ -135,8 +218,8 @@ export function useEditor(initialEdl?: Edl) {
     const silenceCuts: EdlCut[] = silences
       .filter(s => s.duration * 1000 >= thresholdMs && !isCut(s.start * 1000, s.end * 1000))
       .map(s => {
-        const padded = padCut(Math.round(s.start * 1000), Math.round(s.end * 1000))
-        return { type: 'remove' as const, ...padded, reason: `silence:${s.duration.toFixed(1)}s` }
+        const snapped = snapCut(Math.round(s.start * 1000), Math.round(s.end * 1000), waveformRef.current, durationRef.current)
+        return { type: 'remove' as const, ...snapped, reason: `silence:${s.duration.toFixed(1)}s` }
       })
 
     if (silenceCuts.length === 0) return { count: 0, savedMs: 0 }
@@ -178,6 +261,7 @@ export function useEditor(initialEdl?: Edl) {
   return {
     edl,
     setEdl,
+    setWaveformContext,
     isCut,
     addCut,
     removeCutsInRange,

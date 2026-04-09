@@ -67,6 +67,24 @@ const ProjectService = {
       }
     }
 
+    // Self-heal: if audio.wav exists but tracks has no audio entry, add one
+    const audioWavPath = projectPath(project.id, 'media', 'audio.wav');
+    if (existsSync(audioWavPath) && !tracks.some(t => t.type === 'audio')) {
+      try {
+        const audioMeta = await MediaService.extractMetadata(audioWavPath);
+        const audioTrack = audioMeta.tracks.find(t => t.type === 'audio');
+        if (audioTrack) {
+          audioTrack.index = tracks.length;
+          audioTrack.label = 'Microphone';
+          tracks.push(audioTrack);
+          await fs.writeFile(projectPath(project.id, 'data', 'tracks.json'), JSON.stringify(tracks, null, 2));
+          log.info('Audio track self-healed', { projectId });
+        }
+      } catch (err) {
+        log.warn('Audio track self-heal failed', { projectId, error: err.message });
+      }
+    }
+
     const hasWaveform = existsSync(projectPath(project.id, 'data', 'waveform.json'));
 
     return { project, files: { hasTranscript, hasEdl, hasSuggestions, hasTracks: hasTracks || tracks.length > 0, hasWaveform }, tracks };
@@ -207,6 +225,24 @@ const ProjectService = {
         if (existsSync(candidatePath)) {
           log.info('Found sibling audio file in capture', { projectId, audioFile: candidate });
           await MediaService.extractAudio(candidatePath, audioPath);
+
+          // Add audio track to tracks.json so the UI shows it
+          try {
+            const audioMeta = await MediaService.extractMetadata(candidatePath);
+            const audioTrack = audioMeta.tracks.find(t => t.type === 'audio');
+            if (audioTrack) {
+              const tracksPath = projectPath(projectId, 'data', 'tracks.json');
+              const tracks = JSON.parse(await fs.readFile(tracksPath, 'utf-8'));
+              audioTrack.index = tracks.length;
+              audioTrack.label = candidate.includes('mic') ? 'Microphone' : 'System Audio';
+              tracks.push(audioTrack);
+              await fs.writeFile(tracksPath, JSON.stringify(tracks, null, 2));
+              log.info('Audio track added to tracks.json', { projectId, label: audioTrack.label });
+            }
+          } catch (err) {
+            log.warn('Failed to add audio track metadata', { projectId, error: err.message });
+          }
+
           // Generate waveform from the newly extracted audio
           try {
             const waveResult = await MediaService.extractWaveform(audioPath, projectPath(projectId, 'data', 'waveform.json'), 100);
@@ -400,6 +436,34 @@ const ProjectService = {
 
         whisper.on('done', async (transcript) => {
           try {
+            // Phase 2: Forced alignment — refine whisper timestamps using wav2vec2 CTC.
+            // Whisper provides TEXT, the aligner provides TIMESTAMPS (~20ms accuracy).
+            transcript = await TranscribeService.refineWithAlignment(audioPath, transcript);
+
+            // Scale transcript timestamps from audio timeline to video timeline.
+            // Mic and screen are separate recordings with slightly different clocks;
+            // without scaling, words drift progressively out of sync.
+            if (resolvedProject.media_path && resolvedProject.duration_ms) {
+              const audioDurMs = transcript.duration_ms;
+              const videoDurMs = resolvedProject.duration_ms;
+              if (audioDurMs > 0 && videoDurMs > 0 && Math.abs(audioDurMs - videoDurMs) > 50) {
+                const scale = videoDurMs / audioDurMs;
+                log.info('Scaling transcript timestamps to video timeline', {
+                  projectId, audioDurMs, videoDurMs, scale: scale.toFixed(6),
+                });
+                for (const w of transcript.words) {
+                  w.start = Math.round(w.start * scale * 1000) / 1000;
+                  w.end = Math.round(w.end * scale * 1000) / 1000;
+                }
+                for (const s of transcript.silences) {
+                  s.start = Math.round(s.start * scale * 1000) / 1000;
+                  s.end = Math.round(s.end * scale * 1000) / 1000;
+                  s.duration = s.end - s.start;
+                }
+                transcript.duration_ms = videoDurMs;
+              }
+            }
+
             const transcriptPath = projectPath(projectId, 'data', 'transcript.json');
             await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 2));
             await ProjectRepository.update(projectId, { transcript_path: transcriptPath });

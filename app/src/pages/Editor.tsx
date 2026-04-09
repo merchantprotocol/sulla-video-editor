@@ -93,6 +93,12 @@ export default function Editor() {
     }
   }, [files.hasTranscript, files.hasEdl, files.hasWaveform])
 
+  // Keep editor's waveform context in sync for smart cut snapping
+  useEffect(() => {
+    const dur = videoDuration || (project?.duration_ms || 0) / 1000
+    editor.setWaveformContext(waveformData, dur)
+  }, [waveformData, videoDuration, project?.duration_ms])
+
   // Auto-save EDL on changes (debounced)
   useEffect(() => {
     if (editor.edl.cuts.length === 0 && !files.hasEdl) return
