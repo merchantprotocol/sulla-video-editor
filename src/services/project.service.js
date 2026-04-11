@@ -11,6 +11,7 @@ const log = require('../utils/logger').create('project');
 const TemplateRepository = require('../repositories/template.repository');
 const { SYSTEM_TEMPLATES } = require('../templates/system');
 const AnalyzeService = require('./analyze.service');
+const CaptureWriteback = require('./captureWriteback.service');
 
 function projectPath(projectId, ...segments) {
   return path.join(config.storageRoot, projectId, ...segments);
@@ -285,6 +286,12 @@ const ProjectService = {
       }
     }
 
+    // Track capture origin so transcription can be written back to the capture folder
+    if (filePath.startsWith(config.capturesDir)) {
+      await ProjectRepository.update(projectId, { capture_source_path: filePath });
+      log.info('Capture source path stored', { projectId, captureSourcePath: filePath });
+    }
+
     return { project, metadata };
   },
 
@@ -393,6 +400,10 @@ const ProjectService = {
       durationMs: Date.now() - start,
     });
 
+    // Write transcription back to capture folder for indexing (fire-and-forget)
+    CaptureWriteback.writeTranscriptionToCapture(transcript, project.capture_source_path, projectId)
+      .catch(err => log.warn('Capture write-back failed', { projectId, error: err.message }));
+
     // Fire-and-forget AI analysis (don't block transcription response)
     AnalyzeService.analyzeTranscript(transcript).then(async (result) => {
       try {
@@ -468,6 +479,10 @@ const ProjectService = {
             await fs.writeFile(transcriptPath, JSON.stringify(transcript, null, 2));
             await ProjectRepository.update(projectId, { transcript_path: transcriptPath });
 
+            // Write transcription back to capture folder for indexing (fire-and-forget)
+            CaptureWriteback.writeTranscriptionToCapture(transcript, resolvedProject.capture_source_path, projectId)
+              .catch(err => log.warn('Capture write-back failed (streaming)', { projectId, error: err.message }));
+
             const fillerCount = transcript.words.filter(w => w.filler).length;
             log.info('Transcription complete (streaming)', {
               projectId,
@@ -511,6 +526,10 @@ const ProjectService = {
     await fs.writeFile(transcriptPath, JSON.stringify(transcriptData, null, 2));
     await ProjectRepository.update(projectId, {});
     log.info('Transcript saved', { projectId });
+
+    // Update capture folder with latest transcript (fire-and-forget)
+    CaptureWriteback.writeTranscriptionToCapture(transcriptData, project.capture_source_path, projectId)
+      .catch(err => log.warn('Capture write-back failed (manual save)', { projectId, error: err.message }));
   },
 
   async getEdl(projectId, userId) {

@@ -133,7 +133,7 @@
 .lowConfidence:hover { background: var(--yellow-soft); }
 .wordInput { display: inline-block; font: inherit; font-size: inherit; line-height: inherit; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; outline: none; min-width: 30px; vertical-align: baseline; }
 
-.silence { display: inline-flex; align-items: center; gap: 3px; padding: 0 4px; font-size: 10px; font-family: var(--mono); color: var(--yellow); opacity: 0.6; vertical-align: baseline; cursor: pointer; border-radius: 3px; transition: all 0.15s; border-bottom: 1px dashed var(--yellow); }
+.silence { display: flex; align-items: center; gap: 3px; padding: 0 4px; margin: 12px 0 4px; font-size: 10px; font-family: var(--mono); color: var(--yellow); opacity: 0.6; cursor: pointer; border-radius: 3px; transition: all 0.15s; border-bottom: 1px dashed var(--yellow); width: fit-content; }
 .silence:hover { background: var(--yellow-soft); opacity: 1; }
 .silence::before { content: ''; width: 12px; height: 1px; background: var(--yellow); opacity: 0.5; }
 .silenceCut { text-decoration: line-through; opacity: 0.25; color: var(--text-dim); }

@@ -8,7 +8,7 @@ services:
     volumes:
       - "./:/var/www/html:rw"
       - "appdata:/data"
-      - "${CAPTURES_DIR:-~/sulla/captures}:/data/captures:ro"
+      - "${CAPTURES_DIR:-~/sulla/captures}:/data/captures:rw"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - DATABASE_URL=postgresql://sulla:sulla@db:5432/sulla_video
