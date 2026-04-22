@@ -44,6 +44,7 @@ app.use('/api/templates', require('./routes/templates'));
 app.use('/api/captures', require('./routes/captures'));
 app.use('/api/projects', require('./routes/audio'));
 app.use('/api', require('./routes/compose'));
+app.use('/api', require('./routes/tts'));
 
 // ─── OpenAPI spec ───────────────────────────────────────────
 
