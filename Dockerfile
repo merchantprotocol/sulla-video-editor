@@ -1,9 +1,10 @@
 FROM ghcr.io/merchantprotocol/docker-nginx-node20-ffmpeg:latest
 
-# Install whisper.cpp build dependencies
+# Install whisper.cpp build dependencies + postgresql client for migrations
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Build whisper.cpp
@@ -67,4 +68,10 @@ RUN npx playwright install chromium --with-deps 2>/dev/null \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
+
+# Bake the application source into the image so the container is self-contained.
+# In dev, docker-compose bind-mounts `./:/var/www/html` which overlays this COPY.
+WORKDIR /var/www/html
+COPY . /var/www/html
+
 
