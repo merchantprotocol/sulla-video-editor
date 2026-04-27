@@ -22,10 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: ${{ github.repository_owner }}/sulla-video-editor
+          - image: merchantprotocol/sulla-video-editor
             context: .
             dockerfile: Dockerfile
-          - image: ${{ github.repository_owner }}/sulla-video-editor-aligner
+          - image: merchantprotocol/sulla-video-editor-aligner
             context: ./aligner
             dockerfile: aligner/Dockerfile
 
