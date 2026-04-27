@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 env:
@@ -20,10 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: merchantprotocol/sulla-video-editor
+          - image: ${{ github.repository_owner }}/sulla-video-editor
             context: .
             dockerfile: Dockerfile
-          - image: merchantprotocol/sulla-video-editor-aligner
+          - image: ${{ github.repository_owner }}/sulla-video-editor-aligner
             context: ./aligner
             dockerfile: aligner/Dockerfile
 
@@ -51,13 +53,14 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ matrix.image }}
           tags: |
             type=ref,event=branch
+            type=ref,event=tag
             type=sha,prefix=sha-,format=short
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}

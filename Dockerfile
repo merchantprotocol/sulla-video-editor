@@ -74,4 +74,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
 WORKDIR /var/www/html
 COPY . /var/www/html
 
+# Install backend production deps and build the React SPA into public/
+RUN npm install --omit=dev && npm run build
+
 
