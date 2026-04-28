@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function register(name: string, email: string, password: string, orgName: string) {
-    const data = await api.post('/auth/register', { name, email, password, org_name: orgName })
+    const data = await api.post('/auth/register', { name, email, password, orgName: orgName })
     localStorage.setItem('sulla_token', data.token)
     setUser(data.user)
     setOrgs(data.orgs || [])
