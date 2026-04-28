@@ -17,6 +17,7 @@ const WHISPER_MODEL = process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggm
 // from ~100-200ms to ~20-50ms. Requires a tdrz or tiny-diarize model for
 // best results, but improves any model.
 const WHISPER_DTW = process.env.WHISPER_DTW || 'large.v3.turbo';
+const WHISPER_USE_GPU = process.env.WHISPER_USE_GPU === '1';
 
 /**
  * Run whisper.cpp on an audio file and return structured transcript.
@@ -35,6 +36,7 @@ async function transcribe(audioPath) {
     '--dtw', WHISPER_DTW,    // Dynamic Time Warping for precise token alignment
     '--no-flash-attn',       // DTW is incompatible with flash attention
     '-of', outputBase,
+    ...(!WHISPER_USE_GPU ? ['-ng'] : []),
   ];
 
   await exec(WHISPER_CLI, args, {
@@ -66,6 +68,7 @@ function transcribeWithProgress(audioPath) {
     '--dtw', WHISPER_DTW,
     '--no-flash-attn',       // DTW requires standard attention
     '-of', outputBase,
+    ...(!WHISPER_USE_GPU ? ['-ng'] : []),
   ], { timeout: 600000 });
 
   let stderrBuf = '';
@@ -319,6 +322,7 @@ async function realignWords(audioPath, words, startIdx, endIdx) {
       '--dtw', WHISPER_DTW,
       '--no-flash-attn',
       '-of', outputBase,
+      ...(!WHISPER_USE_GPU ? ['-ng'] : []),
     ];
 
     await exec(WHISPER_CLI, args, { timeout: 120000 });
