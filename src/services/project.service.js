@@ -299,6 +299,27 @@ const ProjectService = {
    * Shared media processing: metadata extraction, audio, thumbnails, waveform, DB update.
    */
   async _processMedia(projectId, sourcePath, start) {
+    // Relocate moov atom to front so browsers can play without seeking to the end.
+    // Only applies to container formats that support it (mov/mp4/m4v).
+    const movExts = new Set(['.mov', '.mp4', '.m4v']);
+    if (movExts.has(path.extname(sourcePath).toLowerCase())) {
+      const { execFile } = require('child_process');
+      const { promisify } = require('util');
+      const exec = promisify(execFile);
+      const faststartPath = sourcePath + '.faststart.tmp';
+      try {
+        log.info('Applying moov faststart', { projectId });
+        await exec('ffmpeg', ['-i', sourcePath, '-c', 'copy', '-movflags', '+faststart', '-y', faststartPath], { timeout: 600000 });
+        const { rename } = require('fs/promises');
+        await rename(faststartPath, sourcePath);
+        log.info('Faststart applied', { projectId });
+      } catch (err) {
+        log.warn('Faststart failed (non-fatal), continuing with original', { projectId, error: err.message });
+        const { unlink } = require('fs/promises');
+        await unlink(faststartPath).catch(() => {});
+      }
+    }
+
     log.info('Extracting metadata', { projectId });
     const metadata = await MediaService.extractMetadata(sourcePath);
     log.info('Metadata extracted', {
@@ -492,16 +513,28 @@ const ProjectService = {
               durationMs: Date.now() - startTime,
             });
 
-            emitter.emit('complete', {
+            const summary = {
               word_count: transcript.word_count,
               duration_ms: transcript.duration_ms,
-            });
+            };
+            // Broadcast completion to any reconnected SSE observers
+            const bus = TranscribeService.getActiveEventBus?.(audioPath);
+            if (bus) bus.emit('transcription_complete', summary);
+            emitter.emit('complete', summary);
           } catch (err) {
-            emitter.emit('error', err);
+            // Guard against unhandled 'error' event crash if SSE connection already closed
+            if (emitter.listenerCount('error') > 0) {
+              emitter.emit('error', err);
+            } else {
+              log.error('Transcription post-processing failed (SSE closed)', { projectId, error: err.message });
+            }
           }
         });
 
-        whisper.on('error', (err) => emitter.emit('error', err));
+        whisper.on('error', (err) => {
+          if (emitter.listenerCount('error') > 0) emitter.emit('error', err);
+          else log.error('Whisper error (SSE closed)', { projectId, error: err.message });
+        });
 
         return emitter;
       },

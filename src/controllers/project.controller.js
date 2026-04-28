@@ -63,31 +63,42 @@ const ProjectController = {
       // start() validates project & audio file — call before writing headers
       // so validation errors return proper JSON responses, not broken SSE
       const emitter = stream.start(project);
+      const isObserver = emitter._isObserver === true;
 
       // Set up SSE only after validation passes
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // disable nginx buffering
+        'X-Accel-Buffering': 'no',
       });
+
+      // SSE comment heartbeat every 30s keeps nginx proxy_read_timeout alive
+      // for long CPU-only whisper runs (large-v3-turbo ~35min for 39min video)
+      const heartbeat = setInterval(() => { res.write(': heartbeat\n\n'); }, 30000);
+
+      const end = () => { clearInterval(heartbeat); res.end(); };
 
       emitter.on('progress', (pct) => {
         res.write(`data: ${JSON.stringify({ type: 'progress', progress: pct })}\n\n`);
       });
 
-      emitter.on('complete', (summary) => {
+      // Primary emitter uses 'complete'; observer emitter uses 'transcription_complete'
+      const completeEvent = isObserver ? 'transcription_complete' : 'complete';
+      emitter.on(completeEvent, (summary) => {
         res.write(`data: ${JSON.stringify({ type: 'done', ...summary })}\n\n`);
-        res.end();
+        end();
       });
 
       emitter.on('error', (err) => {
         res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
-        res.end();
+        end();
       });
 
       req.on('close', () => {
-        emitter.removeAllListeners();
+        clearInterval(heartbeat);
+        if (isObserver) emitter.emit('observer_detach');
+        else emitter.removeAllListeners();
       });
     } catch (err) { next(err); }
   },

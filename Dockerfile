@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Build whisper.cpp
 RUN git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp \
     && cd /opt/whisper.cpp \
-    && cmake -B build -DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_CUDA=OFF -DGGML_NEON=OFF \
-        -DCMAKE_C_FLAGS="-march=armv8-a" -DCMAKE_CXX_FLAGS="-march=armv8-a" \
+    && cmake -B build -DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_CUDA=OFF \
+        -DCMAKE_C_FLAGS="-march=armv8-a+simd" -DCMAKE_CXX_FLAGS="-march=armv8-a+simd" \
     && cmake --build build --config Release -j$(nproc) \
     && cp build/bin/whisper-cli /usr/local/bin/whisper-cli \
     && chmod +x /usr/local/bin/whisper-cli \

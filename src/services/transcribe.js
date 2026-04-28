@@ -19,6 +19,18 @@ const WHISPER_MODEL = process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggm
 const WHISPER_DTW = process.env.WHISPER_DTW || 'large.v3.turbo';
 const WHISPER_USE_GPU = process.env.WHISPER_USE_GPU === '1';
 
+// Track active whisper processes and broadcast progress to multiple SSE observers
+// Map: audioPath -> { proc, eventBus, lastProgress }
+const activeTranscriptions = new Map();
+
+/**
+ * Expose the broadcast event bus for an active transcription so project.service
+ * can emit 'transcription_complete' after saving, notifying all observers.
+ */
+function getActiveEventBus(audioPath) {
+  return activeTranscriptions.get(audioPath)?.eventBus ?? null;
+}
+
 /**
  * Run whisper.cpp on an audio file and return structured transcript.
  * Uses SRT output with -ml 1 for word-level segments, plus DTW with
@@ -39,8 +51,8 @@ async function transcribe(audioPath) {
     ...(!WHISPER_USE_GPU ? ['-ng'] : []),
   ];
 
-  await exec(WHISPER_CLI, args, {
-    timeout: 600000,
+  await exec('stdbuf', ['-eL', WHISPER_CLI, ...args], {
+    timeout: 14400000,
   });
 
   const srtPath = `${outputBase}.srt`;
@@ -56,10 +68,41 @@ async function transcribe(audioPath) {
  * Emits: 'progress' (number 0-100), 'done' (transcript), 'error' (Error)
  */
 function transcribeWithProgress(audioPath) {
+  // If whisper already running: return an observer emitter that mirrors the shared bus.
+  // This lets reconnected SSE clients see live progress without spawning a second process.
+  if (activeTranscriptions.has(audioPath)) {
+    const { eventBus, lastProgress } = activeTranscriptions.get(audioPath);
+    const observer = new EventEmitter();
+    observer._isObserver = true;
+
+    // Replay last known progress so the reconnected client isn't stuck at 0%
+    if (lastProgress > 0) process.nextTick(() => observer.emit('progress', lastProgress));
+
+    const onProgress = (pct) => observer.emit('progress', pct);
+    const onComplete = (summary) => observer.emit('transcription_complete', summary);
+    const onError = (err) => observer.emit('error', err);
+
+    eventBus.on('progress', onProgress);
+    eventBus.once('transcription_complete', onComplete);
+    eventBus.once('error', onError);
+
+    observer.once('observer_detach', () => {
+      eventBus.removeListener('progress', onProgress);
+      eventBus.removeListener('transcription_complete', onComplete);
+      eventBus.removeListener('error', onError);
+    });
+    return observer;
+  }
+
   const emitter = new EventEmitter();
+  const eventBus = new EventEmitter();
+  eventBus.setMaxListeners(50);
   const outputBase = audioPath.replace(/\.\w+$/, '');
 
-  const proc = spawn(WHISPER_CLI, [
+  // stdbuf -eL forces line-buffered stderr so progress lines flush immediately
+  // instead of sitting in whisper's internal pipe buffer until the process exits.
+  const proc = spawn('stdbuf', [
+    '-eL', WHISPER_CLI,
     '-m', WHISPER_MODEL,
     '-f', audioPath,
     '-osrt',                 // SRT for word-level segments
@@ -69,9 +112,12 @@ function transcribeWithProgress(audioPath) {
     '--no-flash-attn',       // DTW requires standard attention
     '-of', outputBase,
     ...(!WHISPER_USE_GPU ? ['-ng'] : []),
-  ], { timeout: 600000 });
+  ], { timeout: 14400000 });
+
+  activeTranscriptions.set(audioPath, { proc, eventBus, lastProgress: 0 });
 
   let stderrBuf = '';
+  let lastProgress = -1;
 
   proc.stderr.on('data', (chunk) => {
     stderrBuf += chunk.toString();
@@ -80,13 +126,22 @@ function transcribeWithProgress(audioPath) {
     if (matches) {
       const last = matches[matches.length - 1];
       const pct = parseInt(last.match(/(\d+)%/)[1], 10);
-      emitter.emit('progress', pct);
+      if (pct !== lastProgress) {
+        lastProgress = pct;
+        const entry = activeTranscriptions.get(audioPath);
+        if (entry) entry.lastProgress = pct;
+        emitter.emit('progress', pct);
+        eventBus.emit('progress', pct);
+      }
     }
   });
 
   proc.on('close', async (code) => {
+    activeTranscriptions.delete(audioPath);
     if (code !== 0) {
-      emitter.emit('error', new Error(`whisper-cli exited with code ${code}: ${stderrBuf}`));
+      const err = new Error(`whisper-cli exited with code ${code}: ${stderrBuf.slice(-500)}`);
+      emitter.emit('error', err);
+      eventBus.emit('error', err);
       return;
     }
 
@@ -98,15 +153,20 @@ function transcribeWithProgress(audioPath) {
       emitter.emit('done', transcript);
     } catch (err) {
       emitter.emit('error', err);
+      eventBus.emit('error', err);
     }
   });
 
   proc.on('error', (err) => {
+    activeTranscriptions.delete(audioPath);
     emitter.emit('error', err);
+    eventBus.emit('error', err);
   });
 
   return emitter;
 }
+
+module.exports.getActiveEventBus = getActiveEventBus;
 
 /**
  * Parse SRT timestamp "HH:MM:SS,mmm" to seconds

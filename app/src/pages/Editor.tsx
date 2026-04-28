@@ -24,6 +24,7 @@ export default function Editor() {
   const [videoDuration, setVideoDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
+  const [transcribeProgress, setTranscribeProgress] = useState(0)
   const [saving, setSaving] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [captionsOpen, setCaptionsOpen] = useState(false)
@@ -247,8 +248,9 @@ export default function Editor() {
 
   async function handleTranscribe() {
     setTranscribing(true)
+    setTranscribeProgress(0)
     try {
-      await transcribe()
+      await transcribe((pct) => setTranscribeProgress(pct))
       const t = await getTranscript()
       setTranscript(t)
 
@@ -1193,8 +1195,13 @@ export default function Editor() {
                   <>
                     <p>Media imported. Ready to transcribe.</p>
                     <button className={styles.transcribeBtn} onClick={handleTranscribe} disabled={transcribing}>
-                      {transcribing ? 'Transcribing...' : 'Transcribe with Whisper'}
+                      {transcribing ? `Transcribing… ${transcribeProgress}%` : 'Transcribe with Whisper'}
                     </button>
+                    {transcribing && (
+                      <div className={styles.progressBar}>
+                        <div className={styles.progressFill} style={{ width: `${transcribeProgress}%` }} />
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p>No media imported yet. <Link to="/new">Upload a file</Link> to get started.</p>
