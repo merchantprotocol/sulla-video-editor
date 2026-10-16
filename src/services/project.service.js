@@ -214,44 +214,65 @@ const ProjectService = {
     // Process media (metadata, audio extraction, thumbnails, waveform)
     const metadata = await this._processMedia(projectId, sourcePath, start);
 
-    // If source had no audio, check for sibling audio files in the capture directory
-    // (captures store mic/system-audio as separate files alongside the video)
+    // Capture Studio records audio streams separately from screen/camera video.
+    // Import every manifest-declared audio stream so render can align and mix them,
+    // while keeping the microphone as the preferred transcription source.
     const audioPath = projectPath(projectId, 'media', 'audio.wav');
     if (!existsSync(audioPath)) {
       const captureDir = path.dirname(filePath);
-      // Prefer mic over system-audio (mic is the speaker's voice)
-      const candidates = ['mic-mic.webm', 'mic.webm', 'system-audio.wav', 'system-audio.webm'];
-      for (const candidate of candidates) {
-        const candidatePath = path.join(captureDir, candidate);
-        if (existsSync(candidatePath)) {
-          log.info('Found sibling audio file in capture', { projectId, audioFile: candidate });
-          await MediaService.extractAudio(candidatePath, audioPath);
+      const audioStreams = await this._captureAudioStreams(captureDir);
 
-          // Add audio track to tracks.json so the UI shows it
+      if (audioStreams.length > 0) {
+        const importedStreams = [];
+        const tracksPath = projectPath(projectId, 'data', 'tracks.json');
+        const tracks = JSON.parse(await fs.readFile(tracksPath, 'utf-8'));
+
+        for (let index = 0; index < audioStreams.length; index++) {
+          const stream = audioStreams[index];
+          const ext = path.extname(stream.filename) || '.webm';
+          const storedName = `capture-audio-${index}${ext}`;
+          const storedPath = projectPath(projectId, 'media', storedName);
+          await fs.copyFile(stream.path, storedPath);
+
+          importedStreams.push({
+            type: stream.type,
+            filename: storedName,
+            startOffset: stream.startOffset,
+          });
+
           try {
-            const audioMeta = await MediaService.extractMetadata(candidatePath);
+            const audioMeta = await MediaService.extractMetadata(storedPath);
             const audioTrack = audioMeta.tracks.find(t => t.type === 'audio');
             if (audioTrack) {
-              const tracksPath = projectPath(projectId, 'data', 'tracks.json');
-              const tracks = JSON.parse(await fs.readFile(tracksPath, 'utf-8'));
               audioTrack.index = tracks.length;
-              audioTrack.label = candidate.includes('mic') ? 'Microphone' : 'System Audio';
+              audioTrack.label = stream.type === 'mic' ? 'Microphone' : 'Speaker Audio';
+              audioTrack.role = stream.type === 'mic' ? 'speaker' : 'system-audio';
               tracks.push(audioTrack);
-              await fs.writeFile(tracksPath, JSON.stringify(tracks, null, 2));
-              log.info('Audio track added to tracks.json', { projectId, label: audioTrack.label });
             }
           } catch (err) {
-            log.warn('Failed to add audio track metadata', { projectId, error: err.message });
+            log.warn('Failed to add capture audio track metadata', { projectId, audioFile: stream.filename, error: err.message });
           }
+        }
 
-          // Generate waveform from the newly extracted audio
-          try {
-            const waveResult = await MediaService.extractWaveform(audioPath, projectPath(projectId, 'data', 'waveform.json'), 100);
-            log.info('Waveform extracted from sibling audio', { projectId, samples: waveResult.sample_count });
-          } catch (err) {
-            log.warn('Waveform extraction failed (non-fatal)', { projectId, error: err.message });
-          }
-          break;
+        await fs.writeFile(tracksPath, JSON.stringify(tracks, null, 2));
+        await fs.writeFile(
+          projectPath(projectId, 'data', 'capture-audio.json'),
+          JSON.stringify(importedStreams, null, 2)
+        );
+
+        const transcriptionStream = audioStreams.find(stream => stream.type === 'mic') || audioStreams[0];
+        await MediaService.extractAudio(transcriptionStream.path, audioPath);
+        log.info('Imported Capture Studio audio streams', {
+          projectId,
+          streams: importedStreams.map(stream => stream.type),
+          transcriptionSource: transcriptionStream.filename,
+        });
+
+        try {
+          const waveResult = await MediaService.extractWaveform(audioPath, projectPath(projectId, 'data', 'waveform.json'), 100);
+          log.info('Waveform extracted from capture audio', { projectId, samples: waveResult.sample_count });
+        } catch (err) {
+          log.warn('Waveform extraction failed (non-fatal)', { projectId, error: err.message });
         }
       }
     }
@@ -293,6 +314,48 @@ const ProjectService = {
     }
 
     return { project, metadata };
+  },
+
+  /**
+   * Resolve Capture Studio audio from manifest.json. Legacy filenames are only
+   * used when a capture predates manifests that declared their audio streams.
+   */
+  async _captureAudioStreams(captureDir) {
+    const supportedTypes = new Set(['mic', 'speaker', 'system-audio']);
+    const manifestPath = path.join(captureDir, 'manifest.json');
+    let streams = [];
+
+    try {
+      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
+      streams = (manifest.streams || [])
+        .filter(stream => supportedTypes.has(stream.type) && stream.filename)
+        .filter(stream => path.basename(stream.filename) === stream.filename)
+        .map(stream => ({
+          type: stream.type,
+          filename: stream.filename,
+          startOffset: Math.max(0, Number(stream.startOffset) || 0),
+          path: path.join(captureDir, stream.filename),
+        }))
+        .filter(stream => existsSync(stream.path));
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        log.warn('Capture manifest could not be read', { captureDir, error: err.message });
+      }
+    }
+
+    if (streams.length > 0) return streams;
+
+    const legacy = [
+      ['mic', 'mic.wav'],
+      ['mic', 'mic-mic.webm'],
+      ['mic', 'mic.webm'],
+      ['speaker', 'speaker.webm'],
+      ['system-audio', 'system-audio.wav'],
+      ['system-audio', 'system-audio.webm'],
+    ];
+    return legacy
+      .map(([type, filename]) => ({ type, filename, startOffset: 0, path: path.join(captureDir, filename) }))
+      .filter(stream => existsSync(stream.path));
   },
 
   /**

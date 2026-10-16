@@ -7,27 +7,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Build whisper.cpp
-RUN git clone https://github.com/ggerganov/whisper.cpp.git /opt/whisper.cpp \
+# Build a pinned whisper.cpp release for the portable baseline of each target.
+# BuildKit sets TARGETARCH for every platform in a multi-arch build.
+ARG TARGETARCH
+ARG WHISPER_CPP_VERSION=v1.9.4
+RUN case "$TARGETARCH" in \
+      arm64) ARCH_FLAGS="-march=armv8-a" ;; \
+      amd64) ARCH_FLAGS="-march=x86-64" ;; \
+      *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && git clone --branch "$WHISPER_CPP_VERSION" --depth 1 https://github.com/ggml-org/whisper.cpp.git /opt/whisper.cpp \
     && cd /opt/whisper.cpp \
     && cmake -B build -DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_CUDA=OFF \
-        -DCMAKE_C_FLAGS="-march=armv8-a+simd" -DCMAKE_CXX_FLAGS="-march=armv8-a+simd" \
+        -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF \
+        -DCMAKE_C_FLAGS="$ARCH_FLAGS" -DCMAKE_CXX_FLAGS="$ARCH_FLAGS" \
     && cmake --build build --config Release -j$(nproc) \
     && cp build/bin/whisper-cli /usr/local/bin/whisper-cli \
     && chmod +x /usr/local/bin/whisper-cli \
-    && cp build/src/libwhisper.so* /usr/local/lib/ \
-    && cp build/ggml/src/libggml*.so* /usr/local/lib/ \
+    && cp build/bin/libwhisper.so* /usr/local/lib/ \
+    && cp build/bin/libggml*.so* /usr/local/lib/ \
     && ldconfig
 
-# Download the large-v3-turbo model (best accuracy, optimized speed)
+# Ship the fast English default and retain large-v3-turbo as an opt-in model.
 RUN cd /opt/whisper.cpp \
+    && bash models/download-ggml-model.sh base.en \
     && bash models/download-ggml-model.sh large-v3-turbo
 
 RUN mkdir -p /opt/whisper-models \
+    && cp /opt/whisper.cpp/models/ggml-base.en.bin /opt/whisper-models/ \
     && cp /opt/whisper.cpp/models/ggml-large-v3-turbo.bin /opt/whisper-models/ \
     && rm -rf /opt/whisper.cpp/build
 
-ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-large-v3-turbo.bin
+ENV WHISPER_MODEL_PATH=/opt/whisper-models/ggml-base.en.bin
 
 # Install Chromium for headless rendering
 # Ubuntu 24.04 replaced chromium with a snap stub, so we install from

@@ -12,12 +12,9 @@ const exec = promisify(execFile);
 const WHISPER_CLI = process.env.WHISPER_CLI || 'whisper-cli';
 const WHISPER_MODEL = process.env.WHISPER_MODEL_PATH || '/opt/whisper-models/ggml-base.en.bin';
 
-// Enable Dynamic Time Warping for more accurate word-level timestamps.
-// DTW aligns the audio spectrogram to token boundaries, reducing drift
-// from ~100-200ms to ~20-50ms. Requires a tdrz or tiny-diarize model for
-// best results, but improves any model.
-const WHISPER_DTW = process.env.WHISPER_DTW || 'large.v3.turbo';
 const WHISPER_USE_GPU = process.env.WHISPER_USE_GPU === '1';
+const WHISPER_THREADS = process.env.WHISPER_THREADS || String(os.availableParallelism());
+const WHISPER_TIMEOUT_MS = Number.parseInt(process.env.WHISPER_TIMEOUT_MS, 10) || 30 * 60 * 1000;
 
 // Track active whisper processes and broadcast progress to multiple SSE observers
 // Map: audioPath -> { proc, eventBus, lastProgress }
@@ -33,8 +30,8 @@ function getActiveEventBus(audioPath) {
 
 /**
  * Run whisper.cpp on an audio file and return structured transcript.
- * Uses SRT output with -ml 1 for word-level segments, plus DTW with
- * flash attention disabled (DTW requires standard attention).
+ * Uses SRT output with -ml 1 for word-level segments. The aligner sidecar
+ * refines these preliminary timestamps after transcription.
  */
 async function transcribe(audioPath) {
   const outputBase = audioPath.replace(/\.\w+$/, '');
@@ -45,14 +42,13 @@ async function transcribe(audioPath) {
     '-osrt',                 // SRT output (has word-level segments with -ml 1)
     '-ml', '1',              // max 1 char per segment = word-level output
     '-pp',                   // print progress
-    '--dtw', WHISPER_DTW,    // Dynamic Time Warping for precise token alignment
-    '--no-flash-attn',       // DTW is incompatible with flash attention
+    '-t', WHISPER_THREADS,
     '-of', outputBase,
     ...(!WHISPER_USE_GPU ? ['-ng'] : []),
   ];
 
   await exec('stdbuf', ['-eL', WHISPER_CLI, ...args], {
-    timeout: 14400000,
+    timeout: WHISPER_TIMEOUT_MS,
   });
 
   const srtPath = `${outputBase}.srt`;
@@ -108,11 +104,13 @@ function transcribeWithProgress(audioPath) {
     '-osrt',                 // SRT for word-level segments
     '-ml', '1',
     '-pp',
-    '--dtw', WHISPER_DTW,
-    '--no-flash-attn',       // DTW requires standard attention
+    '-t', WHISPER_THREADS,
     '-of', outputBase,
     ...(!WHISPER_USE_GPU ? ['-ng'] : []),
-  ], { timeout: 14400000 });
+  ], {
+    timeout: WHISPER_TIMEOUT_MS,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
   activeTranscriptions.set(audioPath, { proc, eventBus, lastProgress: 0 });
 
@@ -179,7 +177,7 @@ function parseSrtTime(str) {
 
 /**
  * Parse whisper SRT output (word-level with -ml 1) into our transcript format.
- * Each SRT entry is a single word with precise DTW timestamps.
+ * Each SRT entry is a single word; the aligner refines its timestamps later.
  */
 function parseSrtToTranscript(srtText) {
   const fillerWords = new Set(['um', 'uh', 'like', 'basically', 'actually', 'literally', 'right', 'okay', 'so', 'well', 'you know', 'i mean']);
@@ -379,8 +377,7 @@ async function realignWords(audioPath, words, startIdx, endIdx) {
       '-f', tmpFile,
       '-osrt',
       '-ml', '1',
-      '--dtw', WHISPER_DTW,
-      '--no-flash-attn',
+      '-t', WHISPER_THREADS,
       '-of', outputBase,
       ...(!WHISPER_USE_GPU ? ['-ng'] : []),
     ];

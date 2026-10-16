@@ -61,7 +61,7 @@ function buildSelectFilter(edl, durationMs) {
  *  2. Apply a short fade-out at the end and fade-in at the start
  *  3. Concat all segments
  */
-function buildConcatFilter(keeps) {
+function buildConcatFilter(keeps, audioInput = '[0:a]') {
   const fadeSec = (CROSSFADE_MS / 1000).toFixed(4);
   const vParts = [];
   const aParts = [];
@@ -83,7 +83,7 @@ function buildConcatFilter(keeps) {
     filters[filters.length - 1] += `[v${i}]`;
     vParts.push(`[v${i}]`);
 
-    filters.push(`[0:a]atrim=start=${start}:duration=${dur},asetpts=PTS-STARTPTS`);
+    filters.push(`${audioInput}atrim=start=${start}:duration=${dur},asetpts=PTS-STARTPTS`);
     if (i > 0) filters[filters.length - 1] += `,afade=t=in:st=0:d=${fadeSec}`;
     if (i < keeps.length - 1) {
       const fadeStart = (k.end - k.start - CROSSFADE_MS / 1000).toFixed(4);
@@ -98,6 +98,65 @@ function buildConcatFilter(keeps) {
   filters.push(`${aParts.join('')}concat=n=${keeps.length}:v=0:a=1[outa]`);
 
   return { filterGraph: filters.join('; '), keeps };
+}
+
+/**
+ * Produce one render-ready WAV from Capture Studio's independently recorded
+ * mic/speaker streams. startOffset is milliseconds from the video session
+ * start, so adelay keeps every stream aligned with the video timeline.
+ */
+async function prepareRenderAudio(projectDir, durationMs) {
+  const mediaDir = path.join(projectDir, 'media');
+  const manifestPath = path.join(projectDir, 'data', 'capture-audio.json');
+  let sources = [];
+
+  if (existsSync(manifestPath)) {
+    try {
+      const entries = JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
+      sources = entries
+        .map(entry => ({
+          path: path.join(mediaDir, path.basename(entry.filename || '')),
+          startOffset: Math.max(0, Number(entry.startOffset) || 0),
+        }))
+        .filter(entry => entry.path !== mediaDir && existsSync(entry.path));
+    } catch (err) {
+      log.warn('Capture audio manifest could not be read', { projectDir, error: err.message });
+    }
+  }
+
+  const extractedAudio = path.join(mediaDir, 'audio.wav');
+  if (sources.length === 0 && existsSync(extractedAudio)) {
+    return { path: extractedAudio, temporary: false, sourceCount: 1 };
+  }
+  if (sources.length === 0) return null;
+
+  const mixedPath = path.join(mediaDir, `render-audio-${process.pid}-${Date.now()}.wav`);
+  const args = [];
+  for (const source of sources) args.push('-i', source.path);
+
+  const filters = sources.map((source, index) =>
+    `[${index}:a:0]adelay=${source.startOffset}:all=1,apad[a${index}]`
+  );
+  const inputs = sources.map((_, index) => `[a${index}]`).join('');
+  filters.push(`${inputs}amix=inputs=${sources.length}:duration=longest:dropout_transition=0:normalize=1,atrim=duration=${(durationMs / 1000).toFixed(3)}[mixed]`);
+
+  args.push(
+    '-filter_complex', filters.join('; '),
+    '-map', '[mixed]',
+    '-c:a', 'pcm_s16le',
+    '-y', mixedPath
+  );
+  await runFFmpeg(args);
+
+  log.info('Capture audio mixed for render', {
+    sources: sources.length,
+    durationMs,
+  });
+  return { path: mixedPath, temporary: true, sourceCount: sources.length };
+}
+
+async function cleanupRenderAudio(audio) {
+  if (audio?.temporary) await fs.unlink(audio.path).catch(() => {});
 }
 
 /**
@@ -152,15 +211,20 @@ async function render(projectId, options = {}) {
   const outputPath = path.join(exportsDir, outputName);
   await fs.mkdir(exportsDir, { recursive: true });
 
-  // Build FFmpeg args
-  const args = ['-i', sourceFile, '-y'];
+  const renderAudio = await prepareRenderAudio(projectDir, durationMs);
+
+  // Build FFmpeg args. The prepared audio is always input 1 and is explicitly
+  // mapped so a silent screen recording never wins FFmpeg's default selection.
+  const args = ['-i', sourceFile];
+  if (renderAudio) args.push('-i', renderAudio.path);
+  args.push('-y');
 
   // Apply EDL cuts
   const selectResult = buildSelectFilter(edl, durationMs);
 
   if (selectResult && selectResult.keeps.length > 1) {
     // Use concat filter graph with micro-fades for clean cut transitions
-    const { filterGraph } = buildConcatFilter(selectResult.keeps);
+    const { filterGraph } = buildConcatFilter(selectResult.keeps, renderAudio ? '[1:a:0]' : '[0:a:0]');
 
     // Append scale/pad to the concat output
     const scaleFilter = `[outv]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2[finalv]`;
@@ -171,9 +235,11 @@ async function render(projectId, options = {}) {
     const k = selectResult.keeps[0];
     args.push('-ss', k.start.toFixed(3), '-t', (k.end - k.start).toFixed(3));
     args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+    if (renderAudio) args.push('-map', '0:v:0', '-map', '1:a:0');
   } else {
     // No cuts — just scale
     args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+    if (renderAudio) args.push('-map', '0:v:0', '-map', '1:a:0');
   }
 
   // Audio enhancement filters (applied before encoding)
@@ -205,12 +271,17 @@ async function render(projectId, options = {}) {
   const crf = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
   args.push('-c:v', codec, '-crf', crf, '-preset', 'medium');
   args.push('-c:a', 'aac', '-b:a', '192k');
+  if (renderAudio) args.push('-shortest');
   args.push('-movflags', '+faststart');
   args.push(outputPath);
 
   // Run FFmpeg with progress
   const totalFrames = Math.round((durationMs / 1000) * 30); // estimate
-  await runFFmpeg(args, totalFrames);
+  try {
+    await runFFmpeg(args, totalFrames);
+  } finally {
+    await cleanupRenderAudio(renderAudio);
+  }
 
   // Get output file info
   const stat = await fs.stat(outputPath);
@@ -260,18 +331,29 @@ async function renderClip(projectId, { startMs, endMs, format = '9:16', resoluti
   await fs.mkdir(exportsDir, { recursive: true });
 
   const durationSec = (endMs - startMs) / 1000;
+  const renderAudio = await prepareRenderAudio(projectDir, endMs);
   const args = [
     '-ss', String(startMs / 1000),
     '-t', String(durationSec),
     '-i', sourceFile,
-    '-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`,
+  ];
+  if (renderAudio) args.push('-ss', String(startMs / 1000), '-t', String(durationSec), '-i', renderAudio.path);
+  args.push(
+    '-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`
+  );
+  if (renderAudio) args.push('-map', '0:v:0', '-map', '1:a:0');
+  args.push(
     '-c:v', 'libx264', '-crf', '20', '-preset', 'medium',
     '-c:a', 'aac', '-b:a', '192k',
     '-movflags', '+faststart',
     '-y', outputPath,
-  ];
+  );
 
-  await runFFmpeg(args);
+  try {
+    await runFFmpeg(args);
+  } finally {
+    await cleanupRenderAudio(renderAudio);
+  }
 
   const stat = await fs.stat(outputPath);
   return { path: outputPath, name: clipName, size: stat.size, duration_ms: endMs - startMs };
@@ -413,11 +495,14 @@ function renderWithProgress(projectId, options = {}) {
       const outputPath = path.join(exportsDir, outputName);
       await fs.mkdir(exportsDir, { recursive: true });
 
-      const args = ['-i', sourceFile, '-y'];
+      const renderAudio = await prepareRenderAudio(projectDir, durationMs);
+      const args = ['-i', sourceFile];
+      if (renderAudio) args.push('-i', renderAudio.path);
+      args.push('-y');
       const selectResult = buildSelectFilter(edl, durationMs);
 
       if (selectResult && selectResult.keeps.length > 1) {
-        const { filterGraph } = buildConcatFilter(selectResult.keeps);
+        const { filterGraph } = buildConcatFilter(selectResult.keeps, renderAudio ? '[1:a:0]' : '[0:a:0]');
         const scaleFilter = `[outv]scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2[finalv]`;
         args.push('-filter_complex', `${filterGraph}; ${scaleFilter}`);
         args.push('-map', '[finalv]', '-map', '[outa]');
@@ -425,13 +510,16 @@ function renderWithProgress(projectId, options = {}) {
         const k = selectResult.keeps[0];
         args.push('-ss', k.start.toFixed(3), '-t', (k.end - k.start).toFixed(3));
         args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+        if (renderAudio) args.push('-map', '0:v:0', '-map', '1:a:0');
       } else {
         args.push('-vf', `scale=${dims.w}:${dims.h}:force_original_aspect_ratio=decrease,pad=${dims.w}:${dims.h}:(ow-iw)/2:(oh-ih)/2`);
+        if (renderAudio) args.push('-map', '0:v:0', '-map', '1:a:0');
       }
 
       const crf = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
       args.push('-c:v', codec, '-crf', crf, '-preset', 'medium');
       args.push('-c:a', 'aac', '-b:a', '192k');
+      if (renderAudio) args.push('-shortest');
       args.push('-movflags', '+faststart');
       args.push(outputPath);
 
@@ -442,6 +530,7 @@ function renderWithProgress(projectId, options = {}) {
 
       ffmpeg.on('done', async () => {
         try {
+          await cleanupRenderAudio(renderAudio);
           const stat = await fs.stat(outputPath);
           const result = {
             path: outputPath,
@@ -467,7 +556,10 @@ function renderWithProgress(projectId, options = {}) {
         }
       });
 
-      ffmpeg.on('error', err => emitter.emit('error', err));
+      ffmpeg.on('error', async (err) => {
+        await cleanupRenderAudio(renderAudio);
+        emitter.emit('error', err);
+      });
 
     } catch (err) {
       emitter.emit('error', err);
@@ -529,6 +621,7 @@ async function renderComposed(projectId, options = {}) {
     '-of', 'csv=p=0', sourceFile,
   ]);
   const durationMs = Math.round(parseFloat(stdout.trim()) * 1000);
+  const renderAudio = await prepareRenderAudio(projectDir, durationMs);
 
   // Output dimensions
   const resMap = { '1080p': '1920:1080', '720p': '1280:720', '4k': '3840:2160' };
@@ -599,15 +692,18 @@ async function renderComposed(projectId, options = {}) {
   }
 
   // Build FFmpeg args
-  const args = ['-i', sourceFile, '-y'];
+  const args = ['-i', sourceFile];
+  if (renderAudio) args.push('-i', renderAudio.path);
+  args.push('-y');
 
   if (filters.length > 0) {
     args.push('-filter_complex', filters.join('; '));
     args.push('-map', videoOut);
   }
 
-  // Map the speaker audio track
-  args.push('-map', `0:a:${speakerAudioIdx}`);
+  // Capture Studio audio is stored separately from the selected video stream.
+  // Prefer the aligned mix; retain embedded-audio behavior for other imports.
+  args.push('-map', renderAudio ? '1:a:0' : `0:a:${speakerAudioIdx}`);
 
   // Audio enhancement
   const audioFilters = [];
@@ -628,12 +724,17 @@ async function renderComposed(projectId, options = {}) {
   const crf = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
   args.push('-c:v', 'libx264', '-crf', crf, '-preset', 'medium');
   args.push('-c:a', 'aac', '-b:a', '192k');
+  if (renderAudio) args.push('-shortest');
   args.push('-movflags', '+faststart');
   args.push(outputPath);
 
   log.info('Composed render FFmpeg args', { projectId, argCount: args.length });
 
-  await runFFmpeg(args);
+  try {
+    await runFFmpeg(args);
+  } finally {
+    await cleanupRenderAudio(renderAudio);
+  }
 
   const stat = await fs.stat(outputPath);
   const result = {
@@ -666,6 +767,7 @@ module.exports = {
   renderWithProgress,
   buildSelectFilter,
   buildConcatFilter,
+  prepareRenderAudio,
   getOutputDimensions,
   findSourceFile,
 };
